@@ -1,0 +1,6 @@
+
+.buttonsContainer {
+  display: flex;
+  user-select: none;
+  gap: 4px;
+}

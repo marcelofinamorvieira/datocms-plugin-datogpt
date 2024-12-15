@@ -1,0 +1,16 @@
+export type EditorType =
+  | 'boolean'
+  | 'single_line'
+  | 'markdown'
+  | 'wysiwyg'
+  | 'date_picker'
+  | 'date_time_picker'
+  | 'integer'
+  | 'float'
+  | 'map'
+  | 'color_picker'
+  | 'slug'
+  | 'json'
+  | 'seo'
+  | 'textarea'
+  | 'structured_text';

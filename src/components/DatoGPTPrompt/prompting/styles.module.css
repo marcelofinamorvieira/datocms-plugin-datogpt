@@ -1,0 +1,10 @@
+.promptBar {
+  width: 100%;
+  gap: 4px;
+  display: flex;
+}
+
+.dropdown {
+  height: 100%;
+  font-size: small;
+}
