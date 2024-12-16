@@ -13,7 +13,6 @@ export async function imageUrlToBlob(imageUrl: string) {
     `https://api.cors.lol/?url=${encodeURIComponent(imageUrl)}`
   );
 
-  console.log(response);
   const blob = await response.blob();
   return blob;
 }
