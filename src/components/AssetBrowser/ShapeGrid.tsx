@@ -25,17 +25,11 @@ import {
 import { buildClient } from '@datocms/cma-client-browser';
 import { RenderAssetSourceCtx } from 'datocms-plugin-sdk';
 import { useMemo } from 'react';
+import { ImageBlocks } from '../../types/assetTypes';
 
 //--------------------------------------------------------------------------------------------
 // Types
 //--------------------------------------------------------------------------------------------
-type ImageBlocks = {
-  id: number;
-  url: string;
-  revisedPrompt: string;
-  isUploading: boolean;
-  uploadedAssetURL: string;
-};
 
 // ShapeGridProps: Props that the ShapeGrid component expects.
 // blockCount:     The number of image blocks to display.
@@ -49,13 +43,7 @@ type ImageBlocks = {
 type ShapeGridProps = {
   blockCount: number;
   aspectRatio?: number;
-  uploadArray: {
-    id?: number;
-    url: string;
-    revisedPrompt: string;
-    isUploading: boolean;
-    uploadedAssetURL: string;
-  }[];
+  uploadArray: ImageBlocks[];
   ctx: RenderAssetSourceCtx;
   isLoading: boolean;
   promptString: string;
