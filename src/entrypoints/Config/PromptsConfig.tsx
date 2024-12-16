@@ -1,3 +1,16 @@
+//********************************************************************************************
+// PromptsConfig.tsx
+//
+// This file provides a configuration screen for editing the prompts used by the plugin.
+// It allows customizing the base prompt, alt generation prompt, and field-specific prompts.
+// Users can revert to default prompts or save their customized prompts.
+//
+// The component:
+// - Loads current prompt configurations from plugin parameters.
+// - Displays textareas to edit each prompt.
+// - Offers a button to restore defaults and a button to save changes.
+//********************************************************************************************
+
 import { RenderPageCtx } from 'datocms-plugin-sdk';
 import { Button, Canvas, Spinner } from 'datocms-react-ui';
 import s from '../styles.module.css';
@@ -12,6 +25,7 @@ type PropTypes = {
   ctx: RenderPageCtx;
 };
 
+// saveApiKey updates the plugin parameters with the edited prompts:
 async function saveApiKey(
   ctx: RenderPageCtx,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
@@ -38,6 +52,11 @@ async function saveApiKey(
   });
 }
 
+// The PromptsConfig component:
+// - Loads existing prompts or defaults if none are set
+// - Allows user to edit prompts inline
+// - Can restore defaults
+// - Saves changes back to plugin parameters
 export default function PromptsConfig({ ctx }: PropTypes) {
   const params = ctx.plugin.attributes.parameters as ctxParamsType;
 
@@ -47,7 +66,6 @@ export default function PromptsConfig({ ctx }: PropTypes) {
   const [currentAltGenerationPrompt, setAltGenerationPrompt] = useState(
     params.prompts?.altGenerationPrompt || AltGenerationPrompt
   );
-
   const [currentFieldPrompts, setFieldPrompts] = useState(
     params.prompts?.fieldPrompts || fieldPrompt
   );
@@ -57,6 +75,7 @@ export default function PromptsConfig({ ctx }: PropTypes) {
   return (
     <Canvas ctx={ctx}>
       <div className={s.configContainer}>
+        {/* A warning message about modifying these prompts */}
         <div
           style={{
             backgroundColor: 'var(--alert-color)',
@@ -72,6 +91,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
           <div>Modifying these prompts may affect the behavior of the AI</div>
           <div>Returning unexpected values can cause the plugin to crash</div>
         </div>
+
+        {/* Base prompt configuration */}
         <div>
           <span className={s.label}>Base Prompt</span>
           <ReactTextareaAutosize
@@ -82,12 +103,12 @@ export default function PromptsConfig({ ctx }: PropTypes) {
             className={s.textarea}
           />
           <span className={s.hint}>
-            This is the base prompt that will be used for all prompts. It should
-            prime the model with the right context on how to reply. The format
-            of the answer should be kept agnostic here, as it will be added
-            later.
+            This is the base prompt that will be used for all queries. It should
+            guide the model on how to respond. Keep it format-agnostic.
           </span>
         </div>
+
+        {/* Alt generation prompt configuration */}
         <div>
           <span className={s.label}>Alt Generation Prompt</span>
           <ReactTextareaAutosize
@@ -98,17 +119,19 @@ export default function PromptsConfig({ ctx }: PropTypes) {
             className={s.textarea}
           />
           <span className={s.hint}>
-            This is the prompt that will be used for alt generation. Make sure
-            it only returns plain text, and describes the image
+            This prompt is used for alt text generation of images. Ensure it
+            returns only descriptive text.
           </span>
         </div>
 
+        {/* Field prompts section header */}
         <span className={s.fieldLabelTitle}>Field Prompts</span>
         <span className={s.fieldLabelHint}>
-          These prompts will be used for each type of filed, and are prefixed
-          with "Return the value in a format off..."
+          These prompts are used per field type. They are prefixed with
+          instructions like "Return in a format of...".
         </span>
 
+        {/* Editing each field type prompt */}
         <div>
           <span className={s.label}>Single Line Text Prompt</span>
           <ReactTextareaAutosize
@@ -119,8 +142,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 single_line: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-single_line"
+            id="fieldPrompts-single_line"
             className={s.textarea}
           />
         </div>
@@ -135,8 +158,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 markdown: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-markdown"
+            id="fieldPrompts-markdown"
             className={s.textarea}
           />
         </div>
@@ -151,8 +174,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 wysiwyg: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-wysiwyg"
+            id="fieldPrompts-wysiwyg"
             className={s.textarea}
           />
         </div>
@@ -167,8 +190,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 slug: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-slug"
+            id="fieldPrompts-slug"
             className={s.textarea}
           />
         </div>
@@ -183,8 +206,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 seo: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-seo"
+            id="fieldPrompts-seo"
             className={s.textarea}
           />
         </div>
@@ -199,8 +222,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 map: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-map"
+            id="fieldPrompts-map"
             className={s.textarea}
           />
         </div>
@@ -215,8 +238,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 json: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-json"
+            id="fieldPrompts-json"
             className={s.textarea}
           />
         </div>
@@ -231,14 +254,14 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 integer: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-integer"
+            id="fieldPrompts-integer"
             className={s.textarea}
           />
         </div>
 
         <div>
-          <span className={s.label}> Float Prompt</span>
+          <span className={s.label}>Float Prompt</span>
           <ReactTextareaAutosize
             value={currentFieldPrompts.float}
             onChange={(e) =>
@@ -247,8 +270,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 float: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-float"
+            id="fieldPrompts-float"
             className={s.textarea}
           />
         </div>
@@ -263,8 +286,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 date_picker: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-date_picker"
+            id="fieldPrompts-date_picker"
             className={s.textarea}
           />
         </div>
@@ -279,8 +302,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 date_time_picker: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-date_time_picker"
+            id="fieldPrompts-date_time_picker"
             className={s.textarea}
           />
         </div>
@@ -295,8 +318,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 color_picker: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-color_picker"
+            id="fieldPrompts-color_picker"
             className={s.textarea}
           />
         </div>
@@ -311,8 +334,8 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 boolean: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-boolean"
+            id="fieldPrompts-boolean"
             className={s.textarea}
           />
         </div>
@@ -327,12 +350,13 @@ export default function PromptsConfig({ ctx }: PropTypes) {
                 textarea: e.target.value,
               })
             }
-            name="fieldPrompts"
-            id="fieldPrompts"
+            name="fieldPrompts-textarea"
+            id="fieldPrompts-textarea"
             className={s.textarea}
           />
         </div>
 
+        {/* Buttons to restore defaults or save */}
         <div
           style={{
             display: 'flex',

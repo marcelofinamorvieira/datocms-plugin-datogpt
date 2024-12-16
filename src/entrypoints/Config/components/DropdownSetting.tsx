@@ -1,17 +1,27 @@
-import {
-  Button,
-  CaretDownIcon,
-  CaretUpIcon,
-  Dropdown,
-  DropdownMenu,
-  DropdownOption,
-} from 'datocms-react-ui';
+//********************************************************************************************
+// DropdownSetting.tsx
+//
+// This component provides a labeled dropdown for selecting a single value from a set of options.
+// It's used in the advanced settings page to configure settings like block generation depth.
+//
+// Props:
+// - label: The label describing this setting
+// - selectedValue: The currently selected value
+// - options: An array of strings to choose from
+// - onSelect: Callback when the user selects a new value
+//
+// The component:
+// - Displays a label
+// - Renders a simple dropdown using native <select> for simplicity
+// - Calls onSelect when the user picks a new option
+//
+//********************************************************************************************
 
 type DropdownSettingProps = {
   label: string;
   selectedValue: string;
   options: string[];
-  onSelect: (value: string) => void;
+  onSelect: (val: string) => void;
 };
 
 export function DropdownSetting({
@@ -21,33 +31,27 @@ export function DropdownSetting({
   onSelect,
 }: DropdownSettingProps) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: '1rem',
-      }}
-    >
-      <Dropdown
-        renderTrigger={({ open, onClick }) => (
-          <Button
-            onClick={onClick}
-            rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
-          >
-            {selectedValue}
-          </Button>
-        )}
+    <div style={{ marginBottom: '16px' }}>
+      <label
+        style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}
       >
-        <DropdownMenu>
-          {options.map((option) => (
-            <DropdownOption key={option} onClick={() => onSelect(option)}>
-              {option}
-            </DropdownOption>
-          ))}
-        </DropdownMenu>
-      </Dropdown>
-      <div>{label}</div>
+        {label}
+      </label>
+      <select
+        style={{
+          padding: '8px',
+          borderRadius: '4px',
+          border: '1px solid #ccc',
+        }}
+        value={selectedValue}
+        onChange={(e) => onSelect(e.target.value)}
+      >
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

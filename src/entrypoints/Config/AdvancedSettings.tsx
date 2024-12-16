@@ -1,3 +1,17 @@
+//********************************************************************************************
+// AdvancedSettings.tsx
+//
+// This file provides a page for advanced plugin configuration options.
+// It allows toggling various features like media area permissions, translation fields,
+// block generation depth, and specifying which fields support generation or improvement.
+//
+// This component:
+// - Reads current advanced settings from plugin parameters.
+// - Renders various switches and dropdowns to configure these settings.
+// - Uses helper components SettingsSection and DropdownSetting for cleaner UI layout.
+// - Persists changes when the "Save" button is clicked.
+//********************************************************************************************
+
 import { RenderPageCtx } from 'datocms-plugin-sdk';
 import {
   Button,
@@ -15,6 +29,7 @@ import {
 import { SettingsSection } from './components/SettingsSection';
 import { DropdownSetting } from './components/DropdownSetting';
 
+// Field type objects for labeling:
 export const textFieldTypes = {
   single_line: 'Singe line string',
   markdown: 'Markdown',
@@ -44,6 +59,7 @@ export const translateFieldTypes = {
   structured_text: 'Structured Text',
 };
 
+// saveApiKey updates the plugin's advanced settings:
 async function saveApiKey(
   ctx: RenderPageCtx,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
@@ -68,6 +84,10 @@ type PropTypes = {
   ctx: RenderPageCtx;
 };
 
+// The AdvancedSettings component:
+// - Loads current advanced settings from plugin parameters
+// - Renders form fields (switches, multiple selects) to update them
+// - Allows saving changes to plugin parameters
 export default function AdvancedSettings({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
   const [cureentAdvancedSettings, setAdvancedSettings] = useState(
@@ -78,6 +98,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
   return (
     <Canvas ctx={ctx}>
       <div className={s.configContainer}>
+        {/* Section for fields that can have generated values */}
         <SettingsSection title="Generation Settings">
           <SelectField
             name="generateValueFields"
@@ -91,7 +112,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               isMulti: true,
               options: Object.entries(textFieldTypes).map(([value, label]) => ({
                 label,
-                value: value as keyof typeof textFieldTypes,
+                value,
               })),
             }}
             onChange={(newValue) =>
@@ -103,6 +124,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
+        {/* Section for fields that can be improved */}
         <SettingsSection title="Value Improvement Settings">
           <SelectField
             name="improveValueFields"
@@ -116,7 +138,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               isMulti: true,
               options: Object.entries(textFieldTypes).map(([value, label]) => ({
                 label,
-                value: value as keyof typeof textFieldTypes,
+                value,
               })),
             }}
             onChange={(newValue) =>
@@ -128,6 +150,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
+        {/* Section for translation settings */}
         <SettingsSection title="Translation Settings">
           <SwitchField
             name="translateWholeRecord"
@@ -155,7 +178,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               options: Object.entries(translateFieldTypes).map(
                 ([value, label]) => ({
                   label,
-                  value: value as keyof typeof translateFieldTypes,
+                  value,
                 })
               ),
             }}
@@ -168,6 +191,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
+        {/* Section for media settings */}
         <SettingsSection title="Media Settings">
           <SwitchField
             name="mediaAreaPermissions"
@@ -209,6 +233,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
+        {/* Section for block generation settings */}
         <SettingsSection title="Block Generation Settings">
           <DropdownSetting
             label="Max depth of nested block generation"
@@ -240,6 +265,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
+        {/* Save button */}
         <Button
           disabled={isLoading}
           fullWidth
