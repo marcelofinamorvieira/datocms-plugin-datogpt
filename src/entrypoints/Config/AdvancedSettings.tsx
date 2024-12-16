@@ -2,11 +2,6 @@ import { RenderPageCtx } from 'datocms-plugin-sdk';
 import {
   Button,
   Canvas,
-  CaretDownIcon,
-  CaretUpIcon,
-  Dropdown,
-  DropdownMenu,
-  DropdownOption,
   SelectField,
   Spinner,
   SwitchField,
@@ -17,30 +12,8 @@ import {
   AdvancedSettings as AdvancedSettingsType,
   ctxParamsType,
 } from './ConfigScreen';
-
-type PropTypes = {
-  ctx: RenderPageCtx;
-};
-
-async function saveApiKey(
-  ctx: RenderPageCtx,
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
-  currentParams: ctxParamsType,
-  advancedSettings: AdvancedSettingsType
-) {
-  setIsLoading(true);
-  await ctx.updatePluginParameters({
-    ...currentParams,
-    advancedSettings: advancedSettings,
-  });
-  setIsLoading(false);
-  ctx.customToast({
-    type: 'notice',
-    message: 'Prompts saved!',
-    dismissOnPageChange: true,
-    dismissAfterTimeout: 5000,
-  });
-}
+import { SettingsSection } from './components/SettingsSection';
+import { DropdownSetting } from './components/DropdownSetting';
 
 export const textFieldTypes = {
   single_line: 'Singe line string',
@@ -69,7 +42,30 @@ export const translateFieldTypes = {
   json: 'JSON',
   seo: 'SEO',
   structured_text: 'Structured Text',
-  //we need to add modular content here
+};
+
+async function saveApiKey(
+  ctx: RenderPageCtx,
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
+  currentParams: ctxParamsType,
+  advancedSettings: AdvancedSettingsType
+) {
+  setIsLoading(true);
+  await ctx.updatePluginParameters({
+    ...currentParams,
+    advancedSettings: advancedSettings,
+  });
+  setIsLoading(false);
+  ctx.customToast({
+    type: 'notice',
+    message: 'Prompts saved!',
+    dismissOnPageChange: true,
+    dismissAfterTimeout: 5000,
+  });
+}
+
+type PropTypes = {
+  ctx: RenderPageCtx;
 };
 
 export default function AdvancedSettings({ ctx }: PropTypes) {
@@ -82,72 +78,57 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
   return (
     <Canvas ctx={ctx}>
       <div className={s.configContainer}>
-        <div>
-          <h2>Generation Settings</h2>
-          <div>
-            <SelectField
-              name="generateValueFields"
-              id="generateValueFields"
-              label="Fields with the 'Generate value' option"
-              value={cureentAdvancedSettings.generateValueFields.map(
-                (field) => ({
-                  label: textFieldTypes[field as keyof typeof textFieldTypes],
-                  value: field,
-                })
-              )}
-              selectInputProps={{
-                isMulti: true,
-                options: Object.entries(textFieldTypes).map(
-                  ([value, label]) => ({
-                    label,
-                    value: value as keyof typeof textFieldTypes,
-                  })
-                ),
-              }}
-              onChange={(newValue) =>
-                setAdvancedSettings({
-                  ...cureentAdvancedSettings,
-                  generateValueFields: newValue.map((v) => v.value),
-                })
-              }
-            />
-          </div>
-        </div>
-        <div>
-          <h2>Value Improvement Settings</h2>
-          <div>
-            <SelectField
-              name="improveValueFields"
-              id="improveValueFields"
-              label="Fields with the 'Improve current value' option"
-              value={cureentAdvancedSettings.improveValueFields.map(
-                (field) => ({
-                  label: textFieldTypes[field as keyof typeof textFieldTypes],
-                  value: field,
-                })
-              )}
-              selectInputProps={{
-                isMulti: true,
-                options: Object.entries(textFieldTypes).map(
-                  ([value, label]) => ({
-                    label,
-                    value: value as keyof typeof textFieldTypes,
-                  })
-                ),
-              }}
-              onChange={(newValue) =>
-                setAdvancedSettings({
-                  ...cureentAdvancedSettings,
-                  improveValueFields: newValue.map((v) => v.value),
-                })
-              }
-            />
-          </div>
-        </div>
-        <div>
-          <h2>Translation Settings</h2>
-        </div>
-        <div>
+        <SettingsSection title="Generation Settings">
+          <SelectField
+            name="generateValueFields"
+            id="generateValueFields"
+            label="Fields with the 'Generate value' option"
+            value={cureentAdvancedSettings.generateValueFields.map((field) => ({
+              label: textFieldTypes[field as keyof typeof textFieldTypes],
+              value: field,
+            }))}
+            selectInputProps={{
+              isMulti: true,
+              options: Object.entries(textFieldTypes).map(([value, label]) => ({
+                label,
+                value: value as keyof typeof textFieldTypes,
+              })),
+            }}
+            onChange={(newValue) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                generateValueFields: newValue.map((v) => v.value),
+              })
+            }
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Value Improvement Settings">
+          <SelectField
+            name="improveValueFields"
+            id="improveValueFields"
+            label="Fields with the 'Improve current value' option"
+            value={cureentAdvancedSettings.improveValueFields.map((field) => ({
+              label: textFieldTypes[field as keyof typeof textFieldTypes],
+              value: field,
+            }))}
+            selectInputProps={{
+              isMulti: true,
+              options: Object.entries(textFieldTypes).map(([value, label]) => ({
+                label,
+                value: value as keyof typeof textFieldTypes,
+              })),
+            }}
+            onChange={(newValue) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                improveValueFields: newValue.map((v) => v.value),
+              })
+            }
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Translation Settings">
           <SwitchField
             name="translateWholeRecord"
             id="translateWholeRecord"
@@ -160,9 +141,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
-        </div>
 
-        <div>
           <SelectField
             name="fieldsWithTranslationOption"
             id="fieldsWithTranslationOption"
@@ -187,12 +166,9 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
-        </div>
+        </SettingsSection>
 
-        <div>
-          <h2>Media Settings</h2>
-        </div>
-        <div>
+        <SettingsSection title="Media Settings">
           <SwitchField
             name="mediaAreaPermissions"
             id="mediaAreaPermissions"
@@ -205,8 +181,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
-        </div>
-        <div>
+
           <SwitchField
             name="mediaFieldsPermissions"
             id="mediaFieldsPermissions"
@@ -219,8 +194,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
-        </div>
-        <div>
+
           <SwitchField
             name="generateAlts"
             id="generateAlts"
@@ -233,84 +207,38 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
-        </div>
+        </SettingsSection>
 
-        <div>
-          <h2>Block Generation Settings</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Dropdown
-              renderTrigger={({ open, onClick }) => (
-                <Button
-                  onClick={onClick}
-                  rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
-                >
-                  {cureentAdvancedSettings.blockGenerateDepth}
-                </Button>
-              )}
-            >
-              <DropdownMenu>
-                {[1, 2, 3, 4, 5].map((depth) => (
-                  <DropdownOption
-                    key={depth}
-                    onClick={() =>
-                      setAdvancedSettings({
-                        ...cureentAdvancedSettings,
-                        blockGenerateDepth: depth,
-                      })
-                    }
-                  >
-                    {depth}
-                  </DropdownOption>
-                ))}
-              </DropdownMenu>
-            </Dropdown>
-            <div>Max depth of nested block generation</div>
-          </div>
-        </div>
+        <SettingsSection title="Block Generation Settings">
+          <DropdownSetting
+            label="Max depth of nested block generation"
+            selectedValue={String(cureentAdvancedSettings.blockGenerateDepth)}
+            options={['1', '2', '3', '4', '5']}
+            onSelect={(val) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                blockGenerateDepth: Number(val),
+              })
+            }
+          />
 
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Dropdown
-              renderTrigger={({ open, onClick }) => (
-                <Button
-                  onClick={onClick}
-                  rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
-                >
-                  {cureentAdvancedSettings.blockAssetsGeneration === 'null'
-                    ? 'Leave it empty'
-                    : cureentAdvancedSettings.blockAssetsGeneration ===
-                      'generate'
-                    ? 'Generate new asset'
-                    : 'Find best match in the media area'}
-                </Button>
-              )}
-            >
-              <DropdownMenu>
-                <DropdownOption
-                  onClick={() =>
-                    setAdvancedSettings({
-                      ...cureentAdvancedSettings,
-                      blockAssetsGeneration: 'generate',
-                    })
-                  }
-                >
-                  Generate new asset
-                </DropdownOption>
-                <DropdownOption
-                  onClick={() =>
-                    setAdvancedSettings({
-                      ...cureentAdvancedSettings,
-                      blockAssetsGeneration: 'null',
-                    })
-                  }
-                >
-                  Leave it empty
-                </DropdownOption>
-              </DropdownMenu>
-            </Dropdown>
-            <div>For asset fields inside blocks being generated</div>
-          </div>
-        </div>
+          <DropdownSetting
+            label="For asset fields inside blocks being generated"
+            selectedValue={
+              cureentAdvancedSettings.blockAssetsGeneration === 'null'
+                ? 'Leave it empty'
+                : 'Generate new asset'
+            }
+            options={['Generate new asset', 'Leave it empty']}
+            onSelect={(val) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                blockAssetsGeneration:
+                  val === 'Generate new asset' ? 'generate' : 'null',
+              })
+            }
+          />
+        </SettingsSection>
 
         <Button
           disabled={isLoading}

@@ -132,7 +132,7 @@ async function translateSeoFieldValue(
   return seoObject;
 }
 
-async function translateRichTextValue(
+async function translateBlockValue(
   fieldValue: unknown,
   pluginParams: ctxParamsType,
   toLocale: string,
@@ -146,7 +146,9 @@ async function translateRichTextValue(
   });
 
   for (const block of cleanedFieldValue as any[]) {
-    const fields = await client.fields.list(block.itemTypeId || block.blockModelId);
+    const fields = await client.fields.list(
+      block.itemTypeId || block.blockModelId
+    );
     const fieldTypeDictionary = fields.reduce((acc, field) => {
       acc[field.api_key] = field.appearance.editor;
       return acc;
@@ -250,7 +252,13 @@ async function translateStructuredTextValue(
   }
 
   const cleanedReconstructedObject = finalReconstructedObject.map(
-    ({ originalIndex, ...rest }: { originalIndex?: number; [key: string]: any }) => rest
+    ({
+      originalIndex,
+      ...rest
+    }: {
+      originalIndex?: number;
+      [key: string]: any;
+    }) => rest
   );
 
   return cleanedReconstructedObject;
@@ -260,7 +268,6 @@ async function translateDefaultFieldValue(
   fieldValue: unknown,
   pluginParams: ctxParamsType,
   toLocale: string,
-  fieldType: string,
   openai: OpenAI,
   fieldTypePrompt: string
 ) {
@@ -298,20 +305,40 @@ export async function translateFieldValue(
   }
 
   // Handle each field type separately for clarity:
-  if (fieldType === 'seo') {
-    return translateSeoFieldValue(fieldValue, pluginParams, toLocale, openai, fieldTypePrompt);
+  switch (fieldType) {
+    case 'seo':
+      return translateSeoFieldValue(
+        fieldValue,
+        pluginParams,
+        toLocale,
+        openai,
+        fieldTypePrompt
+      );
+    case 'rich_text':
+      return translateBlockValue(
+        fieldValue,
+        pluginParams,
+        toLocale,
+        openai,
+        apiToken
+      );
+    case 'structured_text':
+      return translateStructuredTextValue(
+        fieldValue,
+        pluginParams,
+        toLocale,
+        openai,
+        apiToken
+      );
+    default:
+      return translateDefaultFieldValue(
+        fieldValue,
+        pluginParams,
+        toLocale,
+        openai,
+        fieldTypePrompt
+      );
   }
-
-  if (fieldType === 'rich_text') {
-    return translateRichTextValue(fieldValue, pluginParams, toLocale, openai, apiToken);
-  }
-
-  if (fieldType === 'structured_text') {
-    return translateStructuredTextValue(fieldValue, pluginParams, toLocale, openai, apiToken);
-  }
-
-  // Default handler
-  return translateDefaultFieldValue(fieldValue, pluginParams, toLocale, fieldType, openai, fieldTypePrompt);
 }
 
 const TranslateField = async (
