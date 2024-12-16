@@ -8,20 +8,6 @@ import locale from 'locale-codes';
 // provided image URL. It leverages the OpenAI API to analyze the image content and generate
 // a suitable alt text that matches the given locale. The logic applies a base prompt for alt
 // generation and includes instructions to translate the result into the target locale.
-//
-// Improvements implemented:
-// 1. Robust Error Handling and Logging:
-//    - The code now gracefully handles errors that occur during the OpenAI request.
-//    - Any failure in generating the alt text triggers logging the issue and returning a
-//      fallback alt text to ensure the application doesn't break unexpectedly.
-//
-// 2. Abstracted Locale Selection Logic:
-//    - The logic for obtaining the locale name from a locale tag is now handled by a separate
-//      helper function (getLocaleName). This abstraction makes it easier to maintain and modify
-//      locale handling in the future.
-//
-// The entire file is now comprehensively commented to facilitate future maintenance.
-//
 //********************************************************************************************
 
 //--------------------------------------------------------------------------------------------

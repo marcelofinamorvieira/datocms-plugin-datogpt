@@ -1,3 +1,11 @@
+//********************************************************************************************
+// DefaultOptions.tsx
+//
+// This component renders various action buttons for a given CMS field, such as generating new values,
+// improving existing values, or translating content between locales.
+//
+//********************************************************************************************
+
 import classNames from 'classnames';
 import { Button } from 'datocms-react-ui';
 import { AnimationControls, motion } from 'framer-motion';
@@ -12,6 +20,16 @@ import {
   translateFieldTypes,
 } from '../../../entrypoints/Config/AdvancedSettings';
 
+//--------------------------------------------------------------------------------------------
+// PropTypes: Defines the shape of the props this component expects.
+//
+// setViewState: A React state setter function to update the current UI view state.
+// ctx: DatoCMS field extension context object, providing metadata and methods for field actions.
+// controls: AnimationControls for managing visual transitions.
+// fieldValue: The current value of the field this component is attached to.
+// pluginParams: Configuration parameters for the plugin.
+//
+//--------------------------------------------------------------------------------------------
 type PropTypes = {
   setViewState: React.Dispatch<React.SetStateAction<string>>;
   ctx: RenderFieldExtensionCtx;
@@ -20,6 +38,46 @@ type PropTypes = {
   pluginParams: ctxParamsType;
 };
 
+//--------------------------------------------------------------------------------------------
+// OptionsButton Component:
+// A small helper component to render a button with consistent styling and behavior.
+//
+// Parameters:
+//   onClick:   Function called when the button is pressed.
+//   label:     Text displayed on the button.
+//   buttonType: Type of the button style ("muted", "primary", etc.).
+//
+// This promotes DRY (Don't Repeat Yourself) principles and makes buttons easier to maintain.
+//--------------------------------------------------------------------------------------------
+function OptionsButton({
+  onClick,
+  label,
+  buttonType = 'muted',
+}: {
+  onClick: () => void;
+  label: string;
+  buttonType?: 'muted' | 'primary';
+}) {
+  return (
+    <Button onClick={onClick} buttonSize="xxs" buttonType={buttonType}>
+      {label}
+    </Button>
+  );
+}
+
+//--------------------------------------------------------------------------------------------
+// DefaultOptions Component
+//
+// This component displays a set of buttons that allow the user to perform various actions on
+// the current field value, including prompting to generate a new value, improving the current
+// value, and translating values to other locales.
+//
+// Logic:
+// - Checks if the field has multiple locales.
+// - Determines if the field is localized and what actions are allowed (e.g., translation).
+// - Shows the appropriate buttons based on plugin settings and the current field type/value.
+//
+//--------------------------------------------------------------------------------------------
 const DefaultOptions = ({
   setViewState,
   ctx,
@@ -27,10 +85,12 @@ const DefaultOptions = ({
   controls,
   pluginParams,
 }: PropTypes) => {
+  // Check if other locales exist
   const hasOtherLocales =
     Array.isArray(ctx.formValues.internalLocales) &&
     ctx.formValues.internalLocales.length > 1;
 
+  // Check if current locale is the primary locale
   const isPrimaryLocale = !!(
     hasOtherLocales &&
     (ctx.formValues.internalLocales as string[])[0] === ctx.locale
@@ -38,7 +98,7 @@ const DefaultOptions = ({
 
   const fieldType = ctx.field.attributes.appearance.editor;
 
-  //is localized and the main locale field has a value
+  // Determine if field is localized and if main locale has a value
   const isLocalized = !!(
     !fieldsThatDontNeedTranslation.includes(fieldType) &&
     hasOtherLocales &&
@@ -51,6 +111,7 @@ const DefaultOptions = ({
     ]
   );
 
+  // Check if the current locale has a non-empty value
   let isEmptyStructuredText =
     fieldType === 'structured_text' &&
     Array.isArray(fieldValue) &&
@@ -65,7 +126,6 @@ const DefaultOptions = ({
   let hasFieldValueInThisLocale = !!fieldValue && !isEmptyStructuredText;
 
   if (
-    //if the field is localized
     fieldValue &&
     typeof fieldValue === 'object' &&
     !Array.isArray(fieldValue) &&
@@ -90,6 +150,10 @@ const DefaultOptions = ({
       !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
 
+  //------------------------------------------------------------------------------------------
+  // Render Buttons
+  //------------------------------------------------------------------------------------------
+
   return (
     <motion.div
       className={classNames(s.buttonsContainer)}
@@ -98,45 +162,42 @@ const DefaultOptions = ({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25, ease: 'easeInOut' }}
     >
+      {/* "Generate value" button: visible if field type is in generateValueFields */}
       {pluginParams.advancedSettings.generateValueFields.includes(
         fieldType as keyof typeof textFieldTypes
       ) && (
         <div key="prompting-button" className={classNames(s.buttonsContainer)}>
-          <Button
+          <OptionsButton
             onClick={() => {
               setViewState('collapsed');
               setTimeout(() => {
                 setViewState('prompting');
               }, 250);
             }}
-            buttonSize="xxs"
-            buttonType="muted"
-          >
-            Prompt to generate new value
-          </Button>
+            label="Prompt to generate new value"
+          />
         </div>
       )}
 
+      {/* "Improve current value" button: visible if field has a value and is listed in improveValueFields */}
       {hasFieldValueInThisLocale &&
         pluginParams.advancedSettings.improveValueFields.includes(
           fieldType as keyof typeof textFieldTypes
         ) && (
           <div key="prompt-button" className={classNames(s.buttonsContainer)}>
-            <Button
-              buttonSize="xxs"
+            <OptionsButton
               onClick={() => {
                 setViewState('collapsed');
                 setTimeout(() => {
                   setViewState('prompting-improve');
                 }, 250);
               }}
-              buttonType="muted"
-            >
-              Prompt to improve current value
-            </Button>
+              label="Prompt to improve current value"
+            />
           </div>
         )}
 
+      {/* "Translate to all locales" button: visible if field is localized and we're on the primary locale */}
       {isLocalized &&
         hasOtherLocales &&
         isPrimaryLocale &&
@@ -144,9 +205,7 @@ const DefaultOptions = ({
           fieldType as keyof typeof translateFieldTypes
         ) && (
           <div key="generate-button" className={classNames(s.buttonsContainer)}>
-            <Button
-              buttonSize="xxs"
-              buttonType="muted"
+            <OptionsButton
               onClick={async () => {
                 const locales = (
                   ctx.formValues.internalLocales as string[]
@@ -163,11 +222,12 @@ const DefaultOptions = ({
                   );
                 }
               }}
-            >
-              Translate to all locales
-            </Button>
+              label="Translate to all locales"
+            />
           </div>
         )}
+
+      {/* "Translate from main locale" button: visible if field is localized and we're NOT on the primary locale */}
       {isLocalized &&
         hasOtherLocales &&
         !isPrimaryLocale &&
@@ -175,9 +235,7 @@ const DefaultOptions = ({
           fieldType as keyof typeof translateFieldTypes
         ) && (
           <div key="generate-button" className={classNames(s.buttonsContainer)}>
-            <Button
-              buttonSize="xxs"
-              buttonType="muted"
+            <OptionsButton
               onClick={() => {
                 TranslateField(
                   setViewState,
@@ -191,9 +249,8 @@ const DefaultOptions = ({
                   fieldType
                 );
               }}
-            >
-              Translate from main locale
-            </Button>
+              label="Translate from main locale"
+            />
           </div>
         )}
     </motion.div>
