@@ -2,22 +2,7 @@
 // ConfigScreen.tsx
 //
 // This file provides the main configuration screen for the plugin, allowing users to
-// input their OpenAI API key and select the desired GPT and Dall-E models. It also provides
-// navigation to advanced options pages.
-//
-// The component:
-// - Reads current plugin parameters or sets defaults if none exist.
-// - Allows the user to input an OpenAI API key.
-// - Lets the user pick a GPT model and a Dall-E model after fetching available models from OpenAI.
-// - Persists these choices in the plugin parameters.
-// - Provides a button to navigate to advanced options.
-//
-// The file also exports types used throughout the plugin configuration:
-// - FieldPrompts: A mapping of field types to their specific prompts.
-// - AdvancedSettings: An object specifying advanced configuration for various plugin features.
-// - ctxParamsType: The main plugin parameters type, bundling API keys, models, prompts, and advanced settings.
-//
-// Default prompts and configuration are provided if none are present.
+// input their OpenAI API key, select GPT and Dall-E models, and navigate to advanced settings.
 //********************************************************************************************
 
 import { RenderConfigScreenCtx } from 'datocms-plugin-sdk';
@@ -43,8 +28,8 @@ import { fieldPrompt } from '../../prompts/FieldPrompts';
 // Type Definitions
 //-------------------------------------------
 
-// FieldPrompts: Defines individual prompts for each field type.
-// Each field type is assigned a prompt guiding the model on how to format the output.
+// FieldPrompts: A mapping from field editor types to their respective prompts.
+// Each field type corresponds to a prompt that guides the model on how to format data.
 export type FieldPrompts = {
   single_line: string;
   markdown: string;
@@ -62,40 +47,38 @@ export type FieldPrompts = {
   textarea: string;
 };
 
-// AdvancedSettings: Represents advanced configuration settings for the plugin.
-// These include toggles and arrays controlling what fields can be generated/improved/translated,
-// as well as settings for media permissions and block generation depth.
+// AdvancedSettings: Configuration object controlling plugin features.
+// The newly added `generateAssetsOnSidebarBulkGeneration` determines if assets can be generated
+// during the "Generate all fields" action from the sidebar.
 export type AdvancedSettings = {
-  mediaAreaPermissions: boolean; // Allow generating assets in the media area
-  translateWholeRecord: boolean; // Allow translation of the whole record from the sidebar
-  generateAlts: boolean; // Allow generation of alt texts for assets
-  mediaFieldsPermissions: boolean; // Allow generation of assets in media fields
-  blockGenerateDepth: number; // Max depth of nested block generation
-  blockAssetsGeneration: 'null' | 'generate'; // Controls asset generation for blocks
-  translationFields: string[]; // Fields that have the 'Translate' option
-  generateValueFields: string[]; // Fields that have the 'Generate value' option
-  improveValueFields: string[]; // Fields that have the 'Improve current value' option
-  seoGenerateAsset: boolean; // Controls whether to generate a new asset when generating SEO value
+  mediaAreaPermissions: boolean;
+  translateWholeRecord: boolean;
+  generateAlts: boolean;
+  mediaFieldsPermissions: boolean;
+  blockGenerateDepth: number;
+  blockAssetsGeneration: 'null' | 'generate';
+  translationFields: string[];
+  generateValueFields: string[];
+  improveValueFields: string[];
+  seoGenerateAsset: boolean;
+  generateAssetsOnSidebarBulkGeneration: boolean; 
 };
 
-// ctxParamsType: Defines the plugin parameters stored in DatoCMS.
-// It includes the API key, model choices, prompt configurations, and advanced settings.
+// ctxParamsType: The main plugin parameters object stored by DatoCMS.
+// Includes API keys, model choices, prompts, and advanced settings.
 export type ctxParamsType = {
-  apiKey: string; // OpenAI API key
-  gptModel: string; // Chosen GPT model (e.g., gpt-4)
-  dallEModel: string; // Chosen Dall-E model (e.g., dall-e-3)
+  apiKey: string;
+  gptModel: string;
+  dallEModel: string;
   prompts: {
-    basePrompt: string; // Base prompt used globally
-    altGenerationPrompt: string; // Prompt for alt text generation
-    fieldPrompts: FieldPrompts; // Per-field-type prompts
+    basePrompt: string;
+    altGenerationPrompt: string;
+    fieldPrompts: FieldPrompts;
   };
-  advancedSettings: AdvancedSettings; // Advanced configuration settings
+  advancedSettings: AdvancedSettings;
 };
 
-// saveApiKey:
-// This async function updates the plugin parameters with the given API key and models,
-// as well as the current prompts and advanced settings if they exist. It then notifies
-// the user that the API key has been saved.
+// saveApiKey: Persists the API key, selected models, and ensures prompt/advanced settings are stored.
 async function saveApiKey(
   ctx: RenderConfigScreenCtx,
   apiKey: string,
@@ -128,6 +111,7 @@ async function saveApiKey(
           generateValueFields: Object.keys(fieldPrompt),
           improveValueFields: Object.keys(fieldPrompt),
           seoGenerateAsset: false,
+          generateAssetsOnSidebarBulkGeneration: false,
         },
   });
   setIsLoading(false);
@@ -139,9 +123,7 @@ async function saveApiKey(
   });
 }
 
-// fetchAvailableModels:
-// Given an API key, this function uses the OpenAI client to fetch a list of available models.
-// It then sets these models into state so they can be displayed in a dropdown for user selection.
+// fetchAvailableModels: Fetches available models from OpenAI using the given API key.
 async function fetchAvailableModels(
   apiKey: string,
   setOptions: React.Dispatch<React.SetStateAction<string[]>>
@@ -151,16 +133,9 @@ async function fetchAvailableModels(
   setOptions(list.data.map((option) => option.id));
 }
 
-// ConfigScreen Component:
-// This is the main configuration screen that appears in the plugin settings.
-// It displays:
-// - An input for the OpenAI API key
-// - Dropdowns to choose GPT and Dall-E models (populated after fetching available models)
-// - A button to save these settings
-// - A button to navigate to the "Advanced Options" page
-//
-// It initializes states for apiKey, model lists, and loading states. On component mount or
-// after changes, it tries to fetch models if a valid API key is present.
+// ConfigScreen component:
+// - Allows the user to configure the OpenAI API key and models.
+// - Provides a button to advanced options where the new toggle can be found.
 export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
 
@@ -169,13 +144,10 @@ export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
     'Insert a valid OpenAI API Key',
   ]);
   const [gptModel, setGptModel] = useState(pluginParams.gptModel ?? 'None');
-  const [dallEModel, setDallEModel] = useState(
-    pluginParams.dallEModel ?? 'None'
-  );
+  const [dallEModel, setDallEModel] = useState(pluginParams.dallEModel ?? 'None');
   const [isLoading, setIsLoading] = useState(false);
 
-  // useEffect: Whenever the apiKey or isLoading changes, attempt to refetch the available models.
-  // If the API key is empty, it won't fetch anything.
+  // Whenever the API key or loading state changes, try to fetch models again if a valid key is provided.
   useEffect(() => {
     if (apiKey) {
       fetchAvailableModels(apiKey, setListOfModels).catch(console.error);
@@ -185,7 +157,7 @@ export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
   return (
     <Canvas ctx={ctx}>
       <div className={s.form}>
-        {/* Text input for the OpenAI API key */}
+        {/* Text input for API Key */}
         <TextField
           required
           name="openAIAPIKey"
@@ -195,7 +167,7 @@ export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
           onChange={(newValue) => setApiKey(newValue)}
         />
 
-        {/* Dropdown for selecting the GPT model from the available models fetched */}
+        {/* Dropdown for GPT model selection */}
         <div className={s.modelSelect}>
           <span>GPT Model:</span>
           <Dropdown
@@ -233,7 +205,7 @@ export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
           </span>
         </div>
 
-        {/* Dropdown for selecting the Dall-E model for image generation */}
+        {/* Dropdown for Dall-E model selection */}
         <div className={s.modelSelect}>
           <span>Dall-E Model:</span>
           <Dropdown
@@ -271,20 +243,18 @@ export default function ConfigScreen({ ctx }: { ctx: RenderConfigScreenCtx }) {
       </div>
 
       <div className={s.buttons}>
-        {/* Button to save the chosen API key and models */}
+        {/* Button to save the API Key and model selections */}
         <Button
           disabled={isLoading}
           fullWidth
           buttonType="primary"
-          onClick={() =>
-            saveApiKey(ctx, apiKey, gptModel, dallEModel, setIsLoading)
-          }
+          onClick={() => saveApiKey(ctx, apiKey, gptModel, dallEModel, setIsLoading)}
         >
           {isLoading ? 'Saving...' : 'Save'}{' '}
           {isLoading && <Spinner size={24} />}
         </Button>
 
-        {/* Button to navigate to advanced options */}
+        {/* Button to navigate to advanced settings (where the new toggle is located) */}
         <Button
           disabled={isLoading}
           fullWidth

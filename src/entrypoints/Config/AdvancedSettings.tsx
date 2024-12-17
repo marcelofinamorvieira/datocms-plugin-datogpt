@@ -1,14 +1,9 @@
 //********************************************************************************************
 // AdvancedSettings.tsx
 //
-// This file provides a page for configuring advanced plugin settings. It includes a variety
-// of toggles and multi-select fields controlling how the plugin behaves. For example:
-// - Which fields can have values generated or improved.
-// - Which fields can be translated.
-// - Media generation permissions.
-// - Block generation depth.
-//
-// The page reads and writes these settings to the plugin parameters so they persist.
+// This file renders a configuration page for advanced plugin settings. It provides toggles
+// and multi-select options to customize plugin behavior, including generation, improvement,
+// translation, and media-related functionalities.
 //********************************************************************************************
 
 import { RenderPageCtx } from 'datocms-plugin-sdk';
@@ -29,10 +24,9 @@ import { SettingsSection } from './components/SettingsSection';
 import { DropdownSetting } from './components/DropdownSetting';
 
 //-------------------------------------------
-// Field types definitions for labeling
+// Mapping objects for field types:
+// These maps help provide human-readable labels for each field type in the UI.
 //-------------------------------------------
-
-// textFieldTypes: Maps internal field editor keys to human-readable labels.
 export const textFieldTypes = {
   single_line: 'Singe line string',
   markdown: 'Markdown',
@@ -51,7 +45,6 @@ export const textFieldTypes = {
   structured_text: 'Structured Text',
 };
 
-// translateFieldTypes: Similar map but for fields that can be translated.
 export const translateFieldTypes = {
   single_line: 'Singe line string',
   markdown: 'Markdown',
@@ -63,9 +56,10 @@ export const translateFieldTypes = {
   structured_text: 'Structured Text',
 };
 
+//-------------------------------------------
 // saveApiKey:
-// Updates the plugin parameters with the current advanced settings.
-// On completion, shows a toast message confirming the save.
+// Saves the updated advanced settings into the plugin parameters. Displays a notice when done.
+//-------------------------------------------
 async function saveApiKey(
   ctx: RenderPageCtx,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
@@ -86,37 +80,49 @@ async function saveApiKey(
   });
 }
 
-// PropTypes for AdvancedSettings component:
-// ctx: RenderPageCtx for interacting with the plugin configuration page.
+//-------------------------------------------
+// PropTypes for the AdvancedSettings component:
+//
+// ctx: Provides context for the configuration page, allowing navigation and parameter updates.
+//-------------------------------------------
 type PropTypes = {
   ctx: RenderPageCtx;
 };
 
+//-------------------------------------------
 // AdvancedSettings Component:
-// Renders a page allowing the user to configure advanced plugin behavior.
-// It loads current advanced settings from plugin parameters, displays them as form fields,
-// and lets the user modify them. On saving, updates the plugin parameters.
 //
-// Sections included:
+// This component displays several sections of settings. Each section groups related toggles
+// and fields. Sections include:
 // - Generation Settings
 // - Value Improvement Settings
 // - Translation Settings
 // - Media Settings
 // - Block Generation Settings
 //
-// Newly added: A toggle in media settings for `seoGenerateAsset`.
+// Newly added in Media Settings is a toggle for `generateAssetsOnSidebarBulkGeneration`
+// that controls if new assets are generated during "Generate all fields" from the sidebar.
+//
+// The user can modify these settings and click "Save" to persist them. The changes are stored
+// in the plugin parameters for future use throughout the plugin.
+//-------------------------------------------
 export default function AdvancedSettings({ ctx }: PropTypes) {
+  // Retrieve current plugin parameters and parse them into `cureentAdvancedSettings`.
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
+
+  // Initialize local state with the existing advanced settings.
   const [cureentAdvancedSettings, setAdvancedSettings] = useState(
     pluginParams.advancedSettings
   );
+
+  // isLoading: Manages the loading state when saving changes.
   const [isLoading, setIsLoading] = useState(false);
 
   return (
     <Canvas ctx={ctx}>
       <div className={s.configContainer}>
         {/* Generation Settings Section:
-           Controls which fields can have the 'Generate value' option. */}
+           Controls which fields have a 'Generate value' button. */}
         <SettingsSection title="Generation Settings">
           <SelectField
             name="generateValueFields"
@@ -143,7 +149,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
         </SettingsSection>
 
         {/* Value Improvement Settings Section:
-           Controls which fields have the 'Improve current value' option. */}
+           Controls which fields allow improving existing values. */}
         <SettingsSection title="Value Improvement Settings">
           <SelectField
             name="improveValueFields"
@@ -170,7 +176,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
         </SettingsSection>
 
         {/* Translation Settings Section:
-           Controls if the whole record can be translated and which fields have translation option. */}
+           Controls translation features, including translating the whole record and specific fields. */}
         <SettingsSection title="Translation Settings">
           <SwitchField
             name="translateWholeRecord"
@@ -212,8 +218,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
         </SettingsSection>
 
         {/* Media Settings Section:
-           Controls permissions for generating assets in media area, fields, alt generation, etc.
-           Now also includes the new seoGenerateAsset toggle. */}
+           Controls various asset-related functionalities, including alt generation */}
         <SettingsSection title="Media Settings">
           <SwitchField
             name="mediaAreaPermissions"
@@ -254,11 +259,10 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
             }
           />
 
-          {/* New Toggle: seoGenerateAsset */}
           <SwitchField
             name="seoGenerateAsset"
             id="seoGenerateAsset"
-            label="Generate new asset when generating an seo value?"
+            label="Generate new asset when generating an SEO value"
             value={cureentAdvancedSettings.seoGenerateAsset}
             onChange={(newValue) =>
               setAdvancedSettings({
@@ -267,10 +271,25 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
+
+          <SwitchField
+            name="generateAssetsOnSidebarBulkGeneration"
+            id="generateAssetsOnSidebarBulkGeneration"
+            label="Generate new assets when generating all field values from sidebar"
+            value={
+              cureentAdvancedSettings.generateAssetsOnSidebarBulkGeneration
+            }
+            onChange={(newValue) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                generateAssetsOnSidebarBulkGeneration: newValue,
+              })
+            }
+          />
         </SettingsSection>
 
         {/* Block Generation Settings Section:
-           Controls how nested block generation and asset generation in blocks are handled. */}
+           Controls nested block generation depth and asset generation within blocks. */}
         <SettingsSection title="Block Generation Settings">
           <DropdownSetting
             label="Max depth of nested block generation"
@@ -302,7 +321,8 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
-        {/* Button to save changes to advanced settings */}
+        {/* Save Button:
+           Commits the changes to advanced settings. */}
         <Button
           disabled={isLoading}
           fullWidth
