@@ -1,11 +1,3 @@
-//********************************************************************************************
-// DatoGPTSidebar.tsx
-//
-// This file defines a sidebar panel within DatoCMS that allows users to generate or improve
-// all fields of a record at once using AI. Users can provide a prompt and trigger generation,
-// or improvement, of all fields.
-//********************************************************************************************
-
 import { Field, RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
 import { Button, Canvas, Spinner } from 'datocms-react-ui';
 import { useState } from 'react';
@@ -15,97 +7,30 @@ import ReactTextareaAutosize from 'react-textarea-autosize';
 import s from '../styles.module.css';
 import generateFieldValue from '../../utils/generate/fieldValue/generateFieldValue';
 import { EditorType } from '../../types/editorTypes';
-
-//-------------------------------------------
-// Internal helper component: PromptInputArea
-//
-// This component renders a textarea where the user can input prompts for generating or improving all fields.
-// It uses ReactTextareaAutosize to dynamically grow as the user types.
-//-------------------------------------------
-function PromptInputArea({
-  prompts,
-  setPrompts,
-}: {
-  prompts: string;
-  setPrompts: React.Dispatch<React.SetStateAction<string>>;
-}) {
-  return (
-    <ReactTextareaAutosize
-      value={prompts}
-      onChange={(e) => setPrompts(e.target.value)}
-      name="prompts"
-      id="prompts"
-      placeholder="Prompt all fields"
-      className={s.promptsTextarea}
-    />
-  );
-}
-
-//-------------------------------------------
-// Internal helper component: GenerateButtons
-//
-// This component shows two buttons:
-// - "Generate all fields" to create new values based on the prompt.
-// - "Improve all fields" to improve existing values.
-//
-// If an operation is in progress (isLoading = true), it disables the buttons and updates the label.
-//-------------------------------------------
-function GenerateButtons({
-  handleGenerateAll,
-  handleImproveAll,
-  isLoading,
-}: {
-  handleGenerateAll: () => void;
-  handleImproveAll: () => void;
-  isLoading: boolean;
-}) {
-  return (
-    <>
-      <Button fullWidth onClick={handleGenerateAll} disabled={isLoading}>
-        {isLoading ? 'Generating...' : 'Generate all fields'}
-      </Button>
-
-      <Button fullWidth onClick={handleImproveAll} disabled={isLoading}>
-        {isLoading ? 'Generating...' : 'Improve all fields'}
-      </Button>
-    </>
-  );
-}
+import {
+  textFieldTypes,
+  translateFieldTypes,
+} from '../Config/AdvancedSettings';
+import { ChatBubbleGenerate } from '../../components/DatoGPTPrompt/messaging/ChatbubbleGenerate';
 
 //-------------------------------------------
 // Async function: generateAllFields
 //
-// Given a prompt and plugin parameters, this function generates or improves all applicable fields.
-// It iterates over all fields in the record, determines if they should be processed based on
-// pluginParams and advanced settings, and uses generateFieldValue for each field.
-//
-// If the advanced setting `generateAssetsOnSidebarBulkGeneration` is false, we will temporarily
-// force `seoGenerateAsset` to false to prevent asset generation.
-//
-// Parameters:
-// - ctx: The DatoCMS RenderItemFormSidebarPanelCtx, providing access to fields, form values, and methods.
-// - pluginParams: Current plugin parameters, including advanced settings.
-// - prompt: The user-provided prompt.
-// - isImprove: If true, improves existing values rather than generating new ones.
-//
-// Steps:
-// 1. Sort fields by position for consistent iteration.
-// 2. For each field, check if it should be generated/improved.
-// 3. Generate or improve using generateFieldValue.
-// 4. Update field values in the CMS form.
-//
-// Returns: A promise that resolves when all fields have been processed.
+// Modified to accept callbacks onStart/onComplete to track field generation progress.
+// Calls onStart before generating each field and onComplete after done.
 //-------------------------------------------
 async function generateAllFields(
   ctx: RenderItemFormSidebarPanelCtx,
   pluginParams: ctxParamsType,
   prompt: string,
-  isImprove: boolean
+  isImprove: boolean,
+  callbacks?: {
+    onStart?: (fieldLabel: string, fieldPath: string) => void;
+    onComplete?: (fieldLabel: string) => void;
+  }
 ) {
-  // Make a shallow copy of pluginParams to avoid mutating original object.
   const modifiedPluginParams = { ...pluginParams };
 
-  // If the toggle `generateAssetsOnSidebarBulkGeneration` is false, disable `seoGenerateAsset` temporarily.
   if (
     !modifiedPluginParams.advancedSettings.generateAssetsOnSidebarBulkGeneration
   ) {
@@ -130,7 +55,7 @@ async function generateAllFields(
     fields: Record<string, any>,
     fieldsets: Record<string, any>
   ): any[] {
-    const NO_FIELDSET = 'NO_FIELDSET'; // Use a string to represent no fieldset
+    const NO_FIELDSET = 'NO_FIELDSET';
 
     const fieldsetsArr = Object.values(fieldsets).map((f: any) => ({
       id: f.id,
@@ -181,7 +106,6 @@ async function generateAllFields(
     return result;
   }
 
-  // Sort fields by their position for predictable operation order.
   const fieldArray = orderFieldsByPosition(
     fieldObjectForThisItemType,
     fieldsetForThisItemType
@@ -189,13 +113,11 @@ async function generateAllFields(
 
   const currentFormValues = ctx.formValues;
 
-  // Loop over each field:
   for (const fieldItem of fieldArray) {
     const field = fieldItem.attributes.api_key;
     const fieldType = fieldItem.attributes.appearance.editor;
     const fieldValue = ctx.formValues[field];
 
-    // Determine if this field should have generation/improvement applied.
     const shouldProcess =
       modifiedPluginParams.advancedSettings.generateValueFields.includes(
         fieldType as EditorType
@@ -204,10 +126,8 @@ async function generateAllFields(
         modifiedPluginParams.advancedSettings
           .generateAssetsOnSidebarBulkGeneration);
 
-    // If not configured to process this field, skip.
     if (!shouldProcess) continue;
 
-    // Gather fieldset info if available for better contextual prompts.
     const fieldsetInfo = fieldItem.relationships.fieldset.data?.id
       ? {
           name:
@@ -219,7 +139,8 @@ async function generateAllFields(
         }
       : null;
 
-    // Perform the generation/improvement of this field.
+    callbacks?.onStart?.(fieldItem.attributes.label, field);
+
     const generatedFieldValue = await generateFieldValue(
       0,
       ctx.itemTypes,
@@ -249,77 +170,150 @@ async function generateAllFields(
       ctx.itemType.attributes.name
     );
 
-    // Check if the field is localized to set the value appropriately.
     const fieldIsLocalized = fieldItem.attributes.localized;
     currentFormValues[field] = fieldIsLocalized
       ? { [ctx.locale]: generatedFieldValue }
       : generatedFieldValue;
 
-    console.log(
-      fieldIsLocalized ? field + '.' + ctx.locale : field,
-      generatedFieldValue
-    );
-    // Update the field in the CMS form with the generated/improved value.
     ctx.setFieldValue(
       fieldIsLocalized ? field + '.' + ctx.locale : field,
       generatedFieldValue
     );
+
+    callbacks?.onComplete?.(fieldItem.attributes.label);
   }
 }
 
 //-------------------------------------------
-// DatoGPTSidebar Component:
-//
-// This is the main component for the sidebar. It:
-// - Displays a textarea for prompts.
-// - Offers buttons to "Generate all fields" or "Improve all fields".
-// - Shows a spinner and "Generating..." message while operations are in progress.
-//
-// On mount, it checks if the plugin is properly configured. If the user
-// triggers generation/improvement, it uses generateAllFields to process all fields.
-// The new toggle `generateAssetsOnSidebarBulkGeneration` is considered in generateAllFields.
-//
-// State variables:
-// - isLoading: Manages spinner display.
-// - prompts: Stores the user's prompt.
-//
-// If no API key or GPT model is configured, a warning message is displayed instead of the UI.
+// Internal helper component: PromptInputArea
 //-------------------------------------------
-function DatoGPTSidebar({ ctx }: { ctx: RenderItemFormSidebarPanelCtx }) {
+function PromptInputArea({
+  prompts,
+  setPrompts,
+}: {
+  prompts: string;
+  setPrompts: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  return (
+    <ReactTextareaAutosize
+      value={prompts}
+      onChange={(e) => setPrompts(e.target.value)}
+      name="prompts"
+      id="prompts"
+      placeholder="Prompt all fields"
+      className={s.promptsTextarea}
+    />
+  );
+}
+
+//-------------------------------------------
+// Internal helper component: GenerateButtons
+//-------------------------------------------
+function GenerateButtons({
+  handleGenerateAll,
+  handleImproveAll,
+  isLoading,
+}: {
+  handleGenerateAll: () => void;
+  handleImproveAll: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <>
+      <Button fullWidth onClick={handleGenerateAll} disabled={isLoading}>
+        {'Generate all fields'}
+      </Button>
+
+      <Button fullWidth onClick={handleImproveAll} disabled={isLoading}>
+        {'Improve all fields'}
+      </Button>
+    </>
+  );
+}
+
+export default function DatoGPTSidebar({
+  ctx,
+}: {
+  ctx: RenderItemFormSidebarPanelCtx;
+}) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
 
-  // Local state for loading state and user prompt.
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [prompts, setPrompts] = useState('');
 
-  // If no API Key or GPT model is set, show a warning.
+  // New state for generation chat bubbles
+  const [generationBubbles, setGenerationBubbles] = useState<
+    { fieldLabel: string; status: 'pending' | 'done'; fieldPath: string }[]
+  >([]);
+
   if (!pluginParams.apiKey || !pluginParams.gptModel) {
     return <div>Please insert a valid API Key and select a GPT Model</div>;
   }
 
-  // handleGenerateAll: Triggered when the user presses "Generate all fields".
-  // Sets loading, calls generateAllFields, then resets loading.
   const handleGenerateAll = () => {
     setIsLoading(true);
-    generateAllFields(ctx, pluginParams, prompts, false).then(() => {
-      setIsLoading(false);
-    });
+    setGenerationBubbles([]);
+    generateAllFields(ctx, pluginParams, prompts, false, {
+      onStart: (fieldLabel, fieldPath) => {
+        setGenerationBubbles((prev) => [
+          ...prev,
+          { fieldLabel, status: 'pending', fieldPath },
+        ]);
+      },
+      onComplete: (fieldLabel) => {
+        setGenerationBubbles((prev) =>
+          prev.map((bubble) =>
+            bubble.fieldLabel === fieldLabel
+              ? { ...bubble, status: 'done' }
+              : bubble
+          )
+        );
+      },
+    })
+      .then(() => {
+        ctx.notice('All fields generated successfully');
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        ctx.alert(error.message || 'Unknown error');
+        setIsLoading(false);
+      });
   };
 
-  // handleImproveAll: Similar to handleGenerateAll, but for improving existing values.
   const handleImproveAll = () => {
     setIsLoading(true);
-    generateAllFields(ctx, pluginParams, prompts, true).then(() => {
-      setIsLoading(false);
-    });
+    setGenerationBubbles([]);
+    generateAllFields(ctx, pluginParams, prompts, true, {
+      onStart: (fieldLabel, fieldPath) => {
+        setGenerationBubbles((prev) => [
+          ...prev,
+          { fieldLabel, status: 'pending', fieldPath },
+        ]);
+      },
+      onComplete: (fieldLabel) => {
+        setGenerationBubbles((prev) =>
+          prev.map((bubble) =>
+            bubble.fieldLabel === fieldLabel
+              ? { ...bubble, status: 'done' }
+              : bubble
+          )
+        );
+      },
+    })
+      .then(() => {
+        ctx.notice('All fields improved successfully');
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        ctx.alert(error.message || 'Unknown error');
+        setIsLoading(false);
+      });
   };
 
-  // Render the UI inside the Canvas. AnimatePresence ensures smooth transitions.
   return (
     <Canvas ctx={ctx}>
       <AnimatePresence mode="wait">
         {!isLoading ? (
-          // If not loading, show the input form (prompt area and buttons).
           <motion.div
             key="form"
             initial={{ opacity: 0 }}
@@ -336,7 +330,6 @@ function DatoGPTSidebar({ ctx }: { ctx: RenderItemFormSidebarPanelCtx }) {
             />
           </motion.div>
         ) : (
-          // If loading, show a spinner and "Generating..." message.
           <motion.div
             key="loading"
             initial={{ opacity: 0 }}
@@ -345,25 +338,37 @@ function DatoGPTSidebar({ ctx }: { ctx: RenderItemFormSidebarPanelCtx }) {
             transition={{ duration: 0.3 }}
             style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              flexDirection: 'column',
+              width: '100%',
+              padding: '0 16px',
+              boxSizing: 'border-box',
             }}
           >
-            <Spinner size={48} />
-            <h1
+            <div
               style={{
-                margin: '1rem',
-                textAlign: 'center',
-                color: 'gray',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              Generating...
-            </h1>
+              {generationBubbles.map((bubble, index) => (
+                <div
+                  key={index}
+                  onClick={() => {
+                    ctx.scrollToField(bubble.fieldPath, ctx.locale);
+                  }}
+                >
+                  <ChatBubbleGenerate
+                    index={index}
+                    bubble={bubble}
+                    theme={ctx.theme}
+                  />
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
     </Canvas>
   );
 }
-
-export default DatoGPTSidebar;
