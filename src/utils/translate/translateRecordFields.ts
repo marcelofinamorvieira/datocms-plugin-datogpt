@@ -32,9 +32,13 @@ import { translateFieldValue } from '../TranslateField';
  */
 
 type TranslateOptions = {
-  onStart?: (fieldLabel: string, locale: string) => void;
+  onStart?: (fieldLabel: string, locale: string, fieldPath: string) => void;
   onComplete?: (fieldLabel: string, locale: string) => void;
 };
+
+interface LocalizedField {
+  [locale: string]: any;
+}
 
 export async function translateRecordFields(
   ctx: RenderItemFormSidebarPanelCtx,
@@ -67,7 +71,7 @@ export async function translateRecordFields(
         fieldValue &&
         typeof fieldValue === 'object' &&
         !Array.isArray(fieldValue) &&
-        fieldValue[sourceLocale] !== undefined
+        fieldValue[sourceLocale as keyof typeof fieldValue] !== undefined
       )
     ) {
       continue;
@@ -78,13 +82,13 @@ export async function translateRecordFields(
 
     // For each target locale, translate the field
     for (const locale of targetLocales) {
-      if (typeof fieldValue[locale] !== 'undefined') {
+      if (typeof (fieldValue as LocalizedField)[locale] !== 'undefined') {
         // We assume a translation might still be relevant if user chooses to overwrite
         // We proceed anyway, or we could skip if we only translate empty fields
       }
 
       // Inform the sidebar that translation for this field-locale is starting
-      options.onStart?.(fieldLabel, locale);
+      options.onStart?.(fieldLabel, locale, field!.attributes.api_key);
 
       // Determine field type prompt
       let fieldTypePrompt = 'Return the response in the format of ';
@@ -93,12 +97,13 @@ export async function translateRecordFields(
 
       // If structured or rich text, a special prompt is handled inside translateFieldValue.
       if (fieldType !== 'structured_text' && fieldType !== 'rich_text') {
-        fieldTypePrompt += baseFieldPrompts[fieldType as keyof typeof baseFieldPrompts] || '';
+        fieldTypePrompt +=
+          baseFieldPrompts[fieldType as keyof typeof baseFieldPrompts] || '';
       }
 
       // Translate the field value
       const translatedFieldValue = await translateFieldValue(
-        fieldValue[sourceLocale],
+        (fieldValue as LocalizedField)[sourceLocale],
         pluginParams,
         locale,
         fieldType,
@@ -108,13 +113,10 @@ export async function translateRecordFields(
       );
 
       // Update form values with the translated field
-      ctx.setFieldValue(
-        field!.attributes.api_key,
-        {
-          ...fieldValue,
-          [locale]: translatedFieldValue,
-        }
-      );
+      ctx.setFieldValue(field!.attributes.api_key, {
+        ...fieldValue,
+        [locale]: translatedFieldValue,
+      });
 
       // Inform the sidebar that this field-locale translation is completed
       options.onComplete?.(fieldLabel, locale);

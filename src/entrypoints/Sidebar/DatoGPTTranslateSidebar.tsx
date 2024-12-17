@@ -62,7 +62,12 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
   // translationBubbles stores the chat-like bubble info.
   // Each bubble: { fieldLabel: string, locale: string, status: 'pending'|'done' }
   const [translationBubbles, setTranslationBubbles] = useState<
-    { fieldLabel: string; locale: string; status: 'pending' | 'done' }[]
+    {
+      fieldLabel: string;
+      locale: string;
+      status: 'pending' | 'done';
+      fieldPath: string;
+    }[]
   >([]);
 
   // If no valid API key or model is configured, prompt user to fix configuration
@@ -87,11 +92,11 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
         selectedLocales,
         selectedLocale,
         {
-          onStart: (fieldLabel, locale) => {
+          onStart: (fieldLabel, locale, fieldPath) => {
             // Add a new bubble to represent this translation's start
             setTranslationBubbles((prev) => [
               ...prev,
-              { fieldLabel, locale, status: 'pending' },
+              { fieldLabel, locale, status: 'pending', fieldPath },
             ]);
           },
           onComplete: (fieldLabel, locale) => {
@@ -212,28 +217,33 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
             transition={{ duration: 0.3 }}
             style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               flexDirection: 'column',
-              position: 'relative',
+              width: '100%',
+              padding: '0 16px',
+              boxSizing: 'border-box',
             }}
           >
-            {/* Spinner */}
-            {/* <Spinner size={48} />
-            <h1
+            <div
               style={{
-                margin: '1rem',
-                textAlign: 'center',
-                color: 'gray',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              Translating...
-            </h1> */}
-
-            {/* Translation Bubbles Container */}
-            <div>
               {translationBubbles.map((bubble, index) => (
-                <ChatBubble key={index} index={index} bubble={bubble} />
+                <div
+                  key={index}
+                  onClick={() => {
+                    ctx.scrollToField(bubble.fieldPath, bubble.locale);
+                  }}
+                >
+                  <ChatBubble
+                    key={index}
+                    index={index}
+                    bubble={bubble}
+                    theme={ctx.theme}
+                  />
+                </div>
               ))}
             </div>
           </motion.div>
