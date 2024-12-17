@@ -1,108 +1,150 @@
-import React from 'react';
-import locale from 'locale-codes';
+import { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AiOutlineOpenAI } from 'react-icons/ai';
+import { Theme } from 'datocms-plugin-sdk';
 
-type Bubble = {
-  status: 'pending' | 'done';
+/**
+ * ChatbubbleTranslate.tsx
+ *
+ * This component renders a single chat bubble representing the translation status of a given field-locale pair.
+ * It receives props describing the field being translated, the target locale, and the current status ('pending' or 'done').
+ *
+ * The component uses Framer Motion for animations:
+ * - When status is 'pending', the bubble displays a spinning OpenAI icon to indicate ongoing translation.
+ * - When the status changes to 'done', the bubble transitions smoothly, stops spinning, and can display a done state (e.g., a checkmark)..
+ *
+ * Props:
+ * - bubble: {
+ *     fieldLabel: string;   // The name/label of the field being translated.
+ *     locale: string;       // The locale into which the field is being translated.
+ *     status: 'pending'|'done'; // Current translation status for this field-locale.
+ *     fieldPath: string;    // The path to the field in the CMS for potential navigation or identification.
+ *   }
+ * - theme: 'light'|'dark';  // Current theme provided by DatoCMS context for styling.
+ * - index: number;          // Index of this bubble in the list for potential staggered animations.
+ */
+
+type BubbleType = {
   fieldLabel: string;
   locale: string;
+  status: 'pending' | 'done';
   fieldPath: string;
 };
 
-type Theme = {
-  accentColor: string;
-  darkColor: string;
-  lightColor: string;
-  primaryColor: string;
-  semiTransparentAccentColor: string;
-};
-
 type Props = {
-  index: number;
-  bubble: Bubble;
+  bubble: BubbleType;
   theme: Theme;
+  index: number;
 };
 
-export const ChatBubble: React.FC<Props> = ({
-  bubble,
-  theme,
-}) => {
-  const isPending = bubble.status === 'pending';
-  const localeSelect = locale.getByTag;
+export function ChatBubble({ bubble, theme, index }: Props) {
+  // Determine styling based on theme and status
+  const backgroundColor = useMemo(() => {
+    if (bubble.status === 'pending') {
+      return theme.lightColor || 'rgb(242, 226, 254)';
+    }
+    return theme.semiTransparentAccentColor || 'rgba(114, 0, 196, 0.08)';
+  }, [theme, bubble.status]);
 
+  const textColor = useMemo(() => {
+    if (bubble.status === 'pending') {
+      return theme.darkColor || 'rgb(32, 0, 56)';
+    }
+    return theme.accentColor || 'rgb(114, 0, 196)';
+  }, [theme, bubble.status]);
+
+  const statusStyle = useMemo(() => {
+    return {
+      fontWeight: 600,
+      color: textColor,
+    };
+  }, [textColor]);
+
+  // Variants for framer-motion to animate bubble appearance and transitions
+  const bubbleVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -20 },
+  };
+
+  // Conditional icon animation:
+  // - If status is 'pending', rotate continuously.
+  // - If status is 'done', stop rotation (no animation).
+  const iconAnimation =
+    bubble.status === 'pending'
+      ? {
+          rotate: [0, 360],
+          transition: {
+            duration: 1,
+            ease: 'linear',
+            repeat: Infinity,
+          },
+        }
+      : {
+          rotate: 0,
+          transition: { duration: 0.2 },
+        };
+
+  // Icon to indicate status: same OpenAI icon, but spinning if pending, static if done
+  // Could switch icon if desired, but instructions say not to remove/change functionality.
+  // We'll keep the same icon and just stop spinning when done.
   return (
-    <div
-      style={{
-        width: '100%',
-        display: 'flex',
-        justifyContent: isPending ? 'flex-start' : 'flex-end',
-        cursor: 'pointer',
-      }}
-    >
-      <div
+    <AnimatePresence>
+      <motion.div
+        key={bubble.fieldLabel + bubble.locale}
+        variants={bubbleVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
         style={{
-          borderRadius: '12px',
-          padding: '12px 18px',
-          fontSize: '14px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-          margin: '6px 0',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          border: '1px solid',
-          maxWidth: '80%',
-          background: isPending
-            ? 'rgba(0, 0, 0, 0.03)'
-            : theme.semiTransparentAccentColor,
-          borderColor: isPending ? 'rgba(0, 0, 0, 0.1)' : theme.lightColor,
-          color: isPending ? 'rgba(0, 0, 0, 0.6)' : theme.accentColor,
+          gap: '12px',
+          backgroundColor,
+          color: textColor,
+          padding: '12px 16px',
+          borderRadius: '12px',
+          marginBottom: '8px',
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+          fontSize: '14px',
+          lineHeight: '1.4',
+          letterSpacing: '0.01em',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+          cursor: 'pointer',
+          border: `1px solid ${
+            theme.semiTransparentAccentColor || 'rgba(114, 0, 196, 0.1)'
+          }`,
         }}
       >
-        {isPending && (
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div
-              style={{
-                width: 14,
-                height: 14,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: '4px',
-              }}
-            >
-              <AiOutlineOpenAI size={14} />
-            </div>
-          </div>
-        )}
-
-        <span
+        {/* OpenAI icon with animation */}
+        <motion.div
           style={{
-            lineHeight: '1.5',
-            fontWeight: 450,
-            letterSpacing: '0.01em',
+            display: 'flex',
+            color: textColor,
           }}
+          animate={iconAnimation}
         >
-          {isPending ? (
-            <>
-              Translating{' '}
-              <strong style={{ fontWeight: 600 }}>"{bubble.fieldLabel}"</strong>{' '}
-              to{' '}
-              <strong style={{ fontWeight: 600 }}>
-                {localeSelect(bubble.locale).name.toLowerCase()}
-              </strong>
-            </>
-          ) : (
-            <>
-              Translated{' '}
-              <strong style={{ fontWeight: 600 }}>"{bubble.fieldLabel}"</strong>{' '}
-              to{' '}
-              <strong style={{ fontWeight: 600 }}>
-                {localeSelect(bubble.locale).name.toLowerCase()}
-              </strong>
-            </>
-          )}
-        </span>
-      </div>
-    </div>
+          <AiOutlineOpenAI size={20} />
+        </motion.div>
+
+        {/* Display text message with enhanced formatting */}
+        <div style={{ flex: 1 }}>
+          <span style={{ fontWeight: 500 }}>
+            {bubble.status === 'pending' ? (
+              <>
+                "<strong style={statusStyle}>{bubble.fieldLabel}</strong>" to{' '}
+                <strong style={statusStyle}>{bubble.locale}</strong>...
+              </>
+            ) : (
+              <>
+                "<strong style={statusStyle}>{bubble.fieldLabel}</strong>" to{' '}
+                <strong style={statusStyle}>{bubble.locale}</strong>
+              </>
+            )}
+          </span>
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
-};
+}

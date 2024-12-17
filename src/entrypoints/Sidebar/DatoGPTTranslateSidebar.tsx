@@ -1,5 +1,5 @@
 import { RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
-import { Button, Canvas, SelectField, Spinner } from 'datocms-react-ui';
+import { Button, Canvas, SelectField } from 'datocms-react-ui';
 import { useState } from 'react';
 import { ctxParamsType } from '../Config/ConfigScreen';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,6 @@ import { ChatBubble } from '../../components/DatoGPTPrompt/messaging/ChatbubbleT
  * - Lets the user pick a "From" locale (source) and multiple "To" locales (targets).
  * - On clicking "Translate all fields", all translatable fields in the record are translated.
  * - Displays a loading spinner while the translation is in progress.
- * - NEW FEATURE: Displays chat-like bubbles above the spinner to show translation progress.
  *   Each bubble represents a field-locale translation. When translation starts for a field-locale,
  *   a bubble appears. When that translation completes, the bubble updates to a completed state.
  *
@@ -124,6 +123,8 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
       setIsLoading(false);
     }
   }
+
+  console.log(ctx.theme);
 
   return (
     <Canvas ctx={ctx}>
