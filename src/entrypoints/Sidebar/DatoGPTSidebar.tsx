@@ -11,7 +11,7 @@ import {
   textFieldTypes,
   translateFieldTypes,
 } from '../Config/AdvancedSettings';
-import { ChatBubbleGenerate } from '../../components/DatoGPTPrompt/messaging/ChatbubbleGenerate';
+import { ChatbubbleGenerate } from '../../components/DatoGPTPrompt/messaging/ChatbubbleGenerate';
 
 //-------------------------------------------
 // Async function: generateAllFields
@@ -355,10 +355,10 @@ export default function DatoGPTSidebar({
                 <div
                   key={index}
                   onClick={() => {
-                    ctx.scrollToField(bubble.fieldPath, ctx.locale);
+                    ctx.scrollToField(bubble.fieldPath); //TODO this is wrong for localized fields, right for unlocalized fields
                   }}
                 >
-                  <ChatBubbleGenerate
+                  <ChatbubbleGenerate
                     index={index}
                     bubble={bubble}
                     theme={ctx.theme}
