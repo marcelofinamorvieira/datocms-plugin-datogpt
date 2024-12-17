@@ -1,80 +1,116 @@
-//********************************************************************************************
-// DatoGPTTranslateSidebar.tsx
-//
-// This file provides a sidebar panel allowing users to translate all fields of a record
-// from one locale to others. It includes improved asynchronous state handling and leverages
-// a dedicated utility function to manage the translation logic, thereby keeping this file
-// more focused and maintainable.
-//
-// Functionality:
-// - The user selects a source locale and one or multiple target locales.
-// - On clicking "Translate all fields", it invokes the utility function to perform batch translation.
-// - While translating, a loading spinner is shown, and after completion, a success notice appears.
-//
-//********************************************************************************************
-
 import { RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
 import { Button, Canvas, SelectField, Spinner } from 'datocms-react-ui';
 import { useState } from 'react';
 import { ctxParamsType } from '../Config/ConfigScreen';
 import { motion, AnimatePresence } from 'framer-motion';
+import { translateRecordFields } from '../../utils/translate/translateRecordFields'; // Import our new utility
+import { ChatBubble } from '../../components/DatoGPTPrompt/messaging/ChatbubbleTranslate';
 
-// Import the dedicated translation utility function:
-import { translateRecordFields } from '../../utils/translate/translateRecordFields';
+/**
+ * DatoGPTTranslateSidebar.tsx
+ *
+ * This file renders a sidebar panel in the DatoCMS UI that allows users to translate
+ * all fields of a record from a source locale into one or more target locales.
+ *
+ * Features:
+ * - Lets the user pick a "From" locale (source) and multiple "To" locales (targets).
+ * - On clicking "Translate all fields", all translatable fields in the record are translated.
+ * - Displays a loading spinner while the translation is in progress.
+ * - NEW FEATURE: Displays chat-like bubbles above the spinner to show translation progress.
+ *   Each bubble represents a field-locale translation. When translation starts for a field-locale,
+ *   a bubble appears. When that translation completes, the bubble updates to a completed state.
+ *
+ * State variables:
+ * - selectedLocale: The source locale for translation (default: the first locale in internalLocales).
+ * - selectedLocales: The target locales to translate into (all locales except the source by default).
+ * - isLoading: Boolean indicating if the translation is currently in progress.
+ * - translationBubbles: An array of objects representing the translation bubbles on the UI.
+ *   Each bubble has { fieldLabel: string, locale: string, status: 'pending'|'done' }.
+ *
+ * Steps:
+ * 1. User picks locales.
+ * 2. Click "Translate all fields".
+ * 3. The translateRecordFields utility function translates each field-locale pair and
+ *    calls our onStart and onComplete callbacks for each translation.
+ * 4. onStart callback adds a bubble with status 'pending', onComplete updates it to 'done'.
+ * 5. Once all translations finish, isLoading is set to false and user gets a success message.
+ */
 
 type PropTypes = {
   ctx: RenderItemFormSidebarPanelCtx;
 };
 
-function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
-  // Retrieve the plugin parameters, expecting API keys and model details
+export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
+  // Retrieve plugin parameters, expecting API keys and model details
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
 
-  // The first locale in `internalLocales` is considered the "source" or "base" locale
+  // The first locale in internalLocales is considered the source/base locale
   const [selectedLocale, setSelectedLocale] = useState<string>(
     (ctx.formValues.internalLocales as Array<string>)[0]
   );
 
-  // By default, all other locales are the target locales
+  // By default, all other locales are target locales
   const [selectedLocales, setSelectedLocales] = useState<Array<string>>(
     (ctx.formValues.internalLocales as Array<string>).filter(
       (locale) => locale !== selectedLocale
     )
   );
 
-  // isLoading is used to manage the loading state machine:
-  // false = idle, true = translating
+  // isLoading tracks if translation is in progress
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // If no valid API key or model is configured, prompt the user to fix configuration
+  // translationBubbles stores the chat-like bubble info.
+  // Each bubble: { fieldLabel: string, locale: string, status: 'pending'|'done' }
+  const [translationBubbles, setTranslationBubbles] = useState<
+    { fieldLabel: string; locale: string; status: 'pending' | 'done' }[]
+  >([]);
+
+  // If no valid API key or model is configured, prompt user to fix configuration
   if (!pluginParams.apiKey || !pluginParams.gptModel) {
     return <div>Please insert a valid API Key and select a GPT Model</div>;
   }
 
-  //--------------------------------------------------------------------------------------------
-  // handleTranslateAllFields
-  //
-  // This function triggers the translation of all fields by invoking the utility function.
-  // It updates the loading state before and after the operation to show the user a spinner
-  // and a completion message.
-  //--------------------------------------------------------------------------------------------
+  /**
+   * handleTranslateAllFields
+   *
+   * Called when "Translate all fields" is clicked.
+   * Sets the loading state and calls translateRecordFields with callbacks.
+   */
   async function handleTranslateAllFields() {
-    // Move to loading state
     setIsLoading(true);
+    setTranslationBubbles([]);
 
     try {
-      // Perform the translation using the dedicated utility function
       await translateRecordFields(
         ctx,
         pluginParams,
         selectedLocales,
-        selectedLocale
+        selectedLocale,
+        {
+          onStart: (fieldLabel, locale) => {
+            // Add a new bubble to represent this translation's start
+            setTranslationBubbles((prev) => [
+              ...prev,
+              { fieldLabel, locale, status: 'pending' },
+            ]);
+          },
+          onComplete: (fieldLabel, locale) => {
+            // Update the bubble to 'done' status
+            setTranslationBubbles((prev) =>
+              prev.map((bubble) =>
+                bubble.fieldLabel === fieldLabel && bubble.locale === locale
+                  ? { ...bubble, status: 'done' }
+                  : bubble
+              )
+            );
+          },
+        }
       );
 
-      // After success, show a success notification
+      // After success, show success message
       ctx.notice('All fields translated successfully');
     } catch (error: any) {
-      // If an error occurs, show an alert with the error message
+      // Show error alert if something goes wrong
       ctx.alert(
         error.message || 'An unknown error occurred during translation'
       );
@@ -84,18 +120,11 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
     }
   }
 
-  //--------------------------------------------------------------------------------------------
-  // Render
-  //
-  // Displays either:
-  // - The configuration form (if isLoading = false)
-  // - A loading spinner (if isLoading = true)
-  //--------------------------------------------------------------------------------------------
   return (
     <Canvas ctx={ctx}>
       <AnimatePresence mode="wait">
         {!isLoading ? (
-          // When not loading, show the form
+          // When not loading, show the configuration form
           <motion.div
             key="form"
             initial={{ opacity: 0 }}
@@ -108,7 +137,6 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
               flexDirection: 'column',
             }}
           >
-            {/* Locale selection row */}
             <div
               style={{
                 display: 'flex',
@@ -133,7 +161,6 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
                   })),
                 }}
                 onChange={(newValue) => {
-                  // On changing the source locale, update the target locales accordingly
                   const newSourceLocale = newValue?.value || selectedLocale;
                   setSelectedLocale(newSourceLocale);
                   setSelectedLocales(
@@ -145,8 +172,6 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
               />
               <h3>To</h3>
             </div>
-
-            {/* Target locale selection row */}
             <div style={{ marginBottom: '1rem' }}>
               <SelectField
                 name="toLocales"
@@ -166,7 +191,6 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
                     })),
                 }}
                 onChange={(newValue) => {
-                  // Update the selected target locales based on user input
                   setSelectedLocales(
                     newValue?.map((locale) => locale.value) || []
                   );
@@ -174,13 +198,12 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
               />
             </div>
 
-            {/* Button to initiate the translation */}
             <Button fullWidth onClick={handleTranslateAllFields}>
               Translate all fields
             </Button>
           </motion.div>
         ) : (
-          // When loading, show a spinner
+          // When loading, show spinner and translation bubbles
           <motion.div
             key="loading"
             initial={{ opacity: 0 }}
@@ -191,9 +214,12 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexDirection: 'column',
+              position: 'relative',
             }}
           >
-            <Spinner size={48} />
+            {/* Spinner */}
+            {/* <Spinner size={48} />
             <h1
               style={{
                 margin: '1rem',
@@ -202,12 +228,17 @@ function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
               }}
             >
               Translating...
-            </h1>
+            </h1> */}
+
+            {/* Translation Bubbles Container */}
+            <div>
+              {translationBubbles.map((bubble, index) => (
+                <ChatBubble key={index} index={index} bubble={bubble} />
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
     </Canvas>
   );
 }
-
-export default DatoGPTTranslateSidebar;

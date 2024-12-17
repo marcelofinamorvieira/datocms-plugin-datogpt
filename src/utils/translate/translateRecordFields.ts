@@ -1,103 +1,123 @@
-//********************************************************************************************
-// translateRecordFields.ts
-//
-// This utility function abstracts the logic of translating all fields of a record from one
-// locale into one or multiple target locales. It was previously inline in DatoGPTTranslateSidebar.tsx
-// and is now extracted here to improve maintainability and separation of concerns.
-//
-// The function:
-// - Fetches fields for the current item type.
-// - Determines which fields are localized and translatable.
-// - For each translatable field, it translates the value from the original locale to each selected target locale.
-// - Uses OpenAI for translations, and updates the form values accordingly.
-//
-// Error handling and asynchronous flow are managed here, so calling code can remain cleaner.
-//
-//********************************************************************************************
-
 import { RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
 import OpenAI from 'openai';
 import { ctxParamsType } from '../../entrypoints/Config/ConfigScreen';
-import { fieldsThatDontNeedTranslation, translateFieldValue } from '../TranslateField';
-import { fieldPrompt } from '../../prompts/FieldPrompts';
+import { translateFieldValue } from '../TranslateField';
+
+/**
+ * translateRecordFields.ts
+ *
+ * This utility function translates all translatable fields of a record from a given source locale
+ * into multiple target locales. It leverages the translateFieldValue function for each field-locale pair.
+ *
+ * Newly added functionality:
+ * - Accepts callbacks (onStart and onComplete) to report the start and completion of each
+ *   field-locale translation. These callbacks are used by the DatoGPTTranslateSidebar to display
+ *   chat-like bubbles showing translation progress.
+ *
+ * Process:
+ * 1. Fetch all fields for the current model.
+ * 2. For each field that can be translated, iterate over the target locales.
+ * 3. For each field-locale pair, call onStart callback, then translate, then onComplete callback.
+ *
+ * Parameters:
+ * - ctx: DatoCMS sidebar panel context, providing form values, field list, etc.
+ * - pluginParams: Configuration parameters including API Key, model, etc.
+ * - targetLocales: Array of locales into which we want to translate fields.
+ * - sourceLocale: The locale from which fields are translated.
+ * - options: An object with callbacks:
+ *    onStart(fieldLabel: string, locale: string)
+ *    onComplete(fieldLabel: string, locale: string)
+ *
+ * Returns: Promise<void> once all translations are done.
+ */
+
+type TranslateOptions = {
+  onStart?: (fieldLabel: string, locale: string) => void;
+  onComplete?: (fieldLabel: string, locale: string) => void;
+};
 
 export async function translateRecordFields(
   ctx: RenderItemFormSidebarPanelCtx,
   pluginParams: ctxParamsType,
-  selectedLocales: Array<string>,
-  originalLocale: string
-): Promise<void> {
-  // Build a DatoCMS CMA client to fetch field information
-  const { buildClient } = await import('@datocms/cma-client-browser');
-  const client = buildClient({
-    apiToken: ctx.currentUserAccessToken!,
-  });
-
-  // Retrieve field list for the current model
-  const fields = await client.fields.list(ctx.itemType);
-  const fieldTypeDictionary = fields.reduce((acc, field) => {
-    acc[field.api_key] = field.appearance.editor;
-    return acc;
-  }, {} as Record<string, string>);
-
-  // Prepare OpenAI instance for translation calls
+  targetLocales: string[],
+  sourceLocale: string,
+  options: TranslateOptions = {}
+) {
+  // Ensure we have an OpenAI instance ready
   const openai = new OpenAI({
     apiKey: pluginParams.apiKey,
     dangerouslyAllowBrowser: true,
   });
 
-  // For each field in the record's form values:
-  for (const field in ctx.formValues) {
-    // Skip internal helper fields
-    if (field === 'internalLocales') continue;
+  const currentFormValues = ctx.formValues;
 
-    // Check if field is localized and can be translated
-    const isLocalized = !!(
-      !fieldsThatDontNeedTranslation.includes(fieldTypeDictionary[field]) &&
-      ctx.formValues[field] &&
-      typeof ctx.formValues[field] === 'object' &&
-      !Array.isArray(ctx.formValues[field]) &&
-      (ctx.formValues[field] as Record<string, unknown>)[
-        (ctx.formValues.internalLocales as string[])[0]
-      ]
-    );
+  // We'll translate only fields that can be translated (excluded by `fieldsThatDontNeedTranslation` in TranslateField)
+  // We'll rely on translateFieldValue to skip irrelevant fields.
+  // For each field, if it's localized and can be translated, we do so.
+  const fieldsArray = Object.values(ctx.fields);
 
-    if (!isLocalized) {
-      // If not localized or not translatable, skip
+  for (const field of fieldsArray) {
+    const fieldType = field!.attributes.appearance.editor;
+    const fieldValue = currentFormValues[field!.attributes.api_key];
+
+    // If field is not localized or doesn't have a value in the source locale, skip
+    if (!field!.attributes.localized) continue;
+    if (
+      !(
+        fieldValue &&
+        typeof fieldValue === 'object' &&
+        !Array.isArray(fieldValue) &&
+        fieldValue[sourceLocale] !== undefined
+      )
+    ) {
       continue;
     }
 
-    // Construct the fieldTypePrompt for translation
-    let fieldTypePrompt = 'Return the response in the format of ';
-    const fieldPromptObject = pluginParams.prompts?.fieldPrompts?.single_line
-      ? pluginParams.prompts.fieldPrompts
-      : fieldPrompt;
+    // Determine a simple field label for the UI
+    const fieldLabel = field!.attributes.label || field!.attributes.api_key;
 
-    if (
-      fieldTypeDictionary[field] !== 'structured_text' &&
-      fieldTypeDictionary[field] !== 'rich_text'
-    ) {
-      fieldTypePrompt +=
-        fieldPromptObject[
-          fieldTypeDictionary[field] as keyof typeof fieldPrompt
-        ];
-    }
+    // For each target locale, translate the field
+    for (const locale of targetLocales) {
+      if (typeof fieldValue[locale] !== 'undefined') {
+        // We assume a translation might still be relevant if user chooses to overwrite
+        // We proceed anyway, or we could skip if we only translate empty fields
+      }
 
-    // Translate the field value to each target locale
-    for (const toLocale of selectedLocales) {
-      const originalFieldValue = (ctx.formValues[field] as Record<string, unknown>)[originalLocale];
-      const translatedField = await translateFieldValue(
-        originalFieldValue,
+      // Inform the sidebar that translation for this field-locale is starting
+      options.onStart?.(fieldLabel, locale);
+
+      // Determine field type prompt
+      let fieldTypePrompt = 'Return the response in the format of ';
+      const fieldPromptObject = pluginParams.prompts?.fieldPrompts;
+      const baseFieldPrompts = fieldPromptObject ? fieldPromptObject : {};
+
+      // If structured or rich text, a special prompt is handled inside translateFieldValue.
+      if (fieldType !== 'structured_text' && fieldType !== 'rich_text') {
+        fieldTypePrompt += baseFieldPrompts[fieldType as keyof typeof baseFieldPrompts] || '';
+      }
+
+      // Translate the field value
+      const translatedFieldValue = await translateFieldValue(
+        fieldValue[sourceLocale],
         pluginParams,
-        toLocale,
-        fieldTypeDictionary[field],
+        locale,
+        fieldType,
         openai,
         fieldTypePrompt,
         ctx.currentUserAccessToken!
       );
 
-      // Update the form with the translated field value
-      ctx.setFieldValue(field + '.' + toLocale, translatedField);
+      // Update form values with the translated field
+      ctx.setFieldValue(
+        field!.attributes.api_key,
+        {
+          ...fieldValue,
+          [locale]: translatedFieldValue,
+        }
+      );
+
+      // Inform the sidebar that this field-locale translation is completed
+      options.onComplete?.(fieldLabel, locale);
     }
   }
 }
