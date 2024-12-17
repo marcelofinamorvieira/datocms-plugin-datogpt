@@ -28,7 +28,7 @@ export function toKebabCase(str: string) {
  * imageUrlToBlob
  * --------------
  * Fetches an image from a given URL and returns its Blob representation.
- * Uses a CORS proxy to ensure the image can be fetched safely.
+ * Uses a CORS proxy to ensure the image can be fetched. (temporary?)
  *
  * @param imageUrl - The URL of the image to fetch.
  * @returns A Blob of the image data.
