@@ -1,15 +1,14 @@
 //********************************************************************************************
 // AdvancedSettings.tsx
 //
-// This file provides a page for advanced plugin configuration options.
-// It allows toggling various features like media area permissions, translation fields,
-// block generation depth, and specifying which fields support generation or improvement.
+// This file provides a page for configuring advanced plugin settings. It includes a variety
+// of toggles and multi-select fields controlling how the plugin behaves. For example:
+// - Which fields can have values generated or improved.
+// - Which fields can be translated.
+// - Media generation permissions.
+// - Block generation depth.
 //
-// This component:
-// - Reads current advanced settings from plugin parameters.
-// - Renders various switches and dropdowns to configure these settings.
-// - Uses helper components SettingsSection and DropdownSetting for cleaner UI layout.
-// - Persists changes when the "Save" button is clicked.
+// The page reads and writes these settings to the plugin parameters so they persist.
 //********************************************************************************************
 
 import { RenderPageCtx } from 'datocms-plugin-sdk';
@@ -29,7 +28,11 @@ import {
 import { SettingsSection } from './components/SettingsSection';
 import { DropdownSetting } from './components/DropdownSetting';
 
-// Field type objects for labeling:
+//-------------------------------------------
+// Field types definitions for labeling
+//-------------------------------------------
+
+// textFieldTypes: Maps internal field editor keys to human-readable labels.
 export const textFieldTypes = {
   single_line: 'Singe line string',
   markdown: 'Markdown',
@@ -48,6 +51,7 @@ export const textFieldTypes = {
   structured_text: 'Structured Text',
 };
 
+// translateFieldTypes: Similar map but for fields that can be translated.
 export const translateFieldTypes = {
   single_line: 'Singe line string',
   markdown: 'Markdown',
@@ -59,7 +63,9 @@ export const translateFieldTypes = {
   structured_text: 'Structured Text',
 };
 
-// saveApiKey updates the plugin's advanced settings:
+// saveApiKey:
+// Updates the plugin parameters with the current advanced settings.
+// On completion, shows a toast message confirming the save.
 async function saveApiKey(
   ctx: RenderPageCtx,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
@@ -80,14 +86,25 @@ async function saveApiKey(
   });
 }
 
+// PropTypes for AdvancedSettings component:
+// ctx: RenderPageCtx for interacting with the plugin configuration page.
 type PropTypes = {
   ctx: RenderPageCtx;
 };
 
-// The AdvancedSettings component:
-// - Loads current advanced settings from plugin parameters
-// - Renders form fields (switches, multiple selects) to update them
-// - Allows saving changes to plugin parameters
+// AdvancedSettings Component:
+// Renders a page allowing the user to configure advanced plugin behavior.
+// It loads current advanced settings from plugin parameters, displays them as form fields,
+// and lets the user modify them. On saving, updates the plugin parameters.
+//
+// Sections included:
+// - Generation Settings
+// - Value Improvement Settings
+// - Translation Settings
+// - Media Settings
+// - Block Generation Settings
+//
+// Newly added: A toggle in media settings for `seoGenerateAsset`.
 export default function AdvancedSettings({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
   const [cureentAdvancedSettings, setAdvancedSettings] = useState(
@@ -98,7 +115,8 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
   return (
     <Canvas ctx={ctx}>
       <div className={s.configContainer}>
-        {/* Section for fields that can have generated values */}
+        {/* Generation Settings Section:
+           Controls which fields can have the 'Generate value' option. */}
         <SettingsSection title="Generation Settings">
           <SelectField
             name="generateValueFields"
@@ -124,7 +142,8 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
-        {/* Section for fields that can be improved */}
+        {/* Value Improvement Settings Section:
+           Controls which fields have the 'Improve current value' option. */}
         <SettingsSection title="Value Improvement Settings">
           <SelectField
             name="improveValueFields"
@@ -150,7 +169,8 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
-        {/* Section for translation settings */}
+        {/* Translation Settings Section:
+           Controls if the whole record can be translated and which fields have translation option. */}
         <SettingsSection title="Translation Settings">
           <SwitchField
             name="translateWholeRecord"
@@ -191,7 +211,9 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
-        {/* Section for media settings */}
+        {/* Media Settings Section:
+           Controls permissions for generating assets in media area, fields, alt generation, etc.
+           Now also includes the new seoGenerateAsset toggle. */}
         <SettingsSection title="Media Settings">
           <SwitchField
             name="mediaAreaPermissions"
@@ -231,9 +253,24 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
               })
             }
           />
+
+          {/* New Toggle: seoGenerateAsset */}
+          <SwitchField
+            name="seoGenerateAsset"
+            id="seoGenerateAsset"
+            label="Generate new asset when generating an seo value?"
+            value={cureentAdvancedSettings.seoGenerateAsset}
+            onChange={(newValue) =>
+              setAdvancedSettings({
+                ...cureentAdvancedSettings,
+                seoGenerateAsset: newValue,
+              })
+            }
+          />
         </SettingsSection>
 
-        {/* Section for block generation settings */}
+        {/* Block Generation Settings Section:
+           Controls how nested block generation and asset generation in blocks are handled. */}
         <SettingsSection title="Block Generation Settings">
           <DropdownSetting
             label="Max depth of nested block generation"
@@ -265,7 +302,7 @@ export default function AdvancedSettings({ ctx }: PropTypes) {
           />
         </SettingsSection>
 
-        {/* Save button */}
+        {/* Button to save changes to advanced settings */}
         <Button
           disabled={isLoading}
           fullWidth
