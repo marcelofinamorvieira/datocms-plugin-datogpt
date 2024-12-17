@@ -234,11 +234,13 @@ const ModularContentPrompting = ({
       />
 
       {/* Block type selection dropdown */}
-      <BlockTypeSelector
-        availableOptions={availableOptions}
-        selectedBlockType={selectedBlockType}
-        setSelectedBlockType={setSelectedBlockType}
-      />
+      {!isImprove && (
+        <BlockTypeSelector
+          availableOptions={availableOptions}
+          selectedBlockType={selectedBlockType}
+          setSelectedBlockType={setSelectedBlockType}
+        />
+      )}
     </motion.div>
   );
 };

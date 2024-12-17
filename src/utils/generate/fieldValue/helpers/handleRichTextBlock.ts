@@ -56,6 +56,11 @@ export async function handleRichTextBlock(
     apiToken: datoKey,
   });
 
+  if (isImprove) {
+    //TODO: Implement improve prompt for rich_text blocks
+    return fieldValue;
+  }
+
   if (blockInfo.apiKey === 'auto_select_gpt_plugin') {
     const availableFieldNames = blockInfo.availableBlocks.map((blockId) => {
       return {

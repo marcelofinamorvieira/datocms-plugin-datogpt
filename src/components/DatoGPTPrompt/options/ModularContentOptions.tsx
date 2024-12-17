@@ -123,7 +123,10 @@ const ModularContentOptions = ({
       <div
         key="prompt-button"
         onClick={() => {
-          // TODO: Implement prompt based on current value for modular content
+          setViewState('collapsed');
+          setTimeout(() => {
+            setViewState('prompting-improve');
+          }, 250);
         }}
         className={classNames(s.buttonsContainer)}
       >

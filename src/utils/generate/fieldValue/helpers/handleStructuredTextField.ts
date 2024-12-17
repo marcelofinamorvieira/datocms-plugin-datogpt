@@ -43,6 +43,11 @@ export async function handleStructuredTextField(
     hint: fieldInfo.hint,
   };
 
+  if (isImprove) {
+    //TODO: Implement improve prompt for structured_text fields
+    return fieldValue;
+  }
+
   // Generate a base HTML using wysiwyg prompt
   const baseDocument = await generateFieldValue(
     0,
