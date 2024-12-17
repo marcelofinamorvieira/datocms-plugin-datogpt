@@ -113,10 +113,10 @@ export async function translateRecordFields(
       );
 
       // Update form values with the translated field
-      ctx.setFieldValue(field!.attributes.api_key, {
-        ...fieldValue,
-        [locale]: translatedFieldValue,
-      });
+      ctx.setFieldValue(
+        field!.attributes.api_key + '.' + locale,
+        translatedFieldValue
+      );
 
       // Inform the sidebar that this field-locale translation is completed
       options.onComplete?.(fieldLabel, locale);
