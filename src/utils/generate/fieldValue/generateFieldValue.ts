@@ -1,3 +1,28 @@
+//********************************************************************************************
+// generateFieldValue.ts
+//
+// This file is responsible for generating or improving field values using OpenAI responses.
+// It handles various field types, including text, structured fields, SEO fields, and media fields,
+// and orchestrates prompting and parsing logic to produce the final field value.
+//
+// Core Functionality:
+// - Communicates with OpenAI via the provided API key and model parameters.
+// - Generates field values according to user prompts, improving existing ones when requested.
+// - Handles different field types with customized logic, including default text fields, SEO fields,
+//   galleries, structured_text fields, and blocks within rich text fields.
+// - If block fields are encountered, it may recursively generate nested fields according to the
+//   plugin's advanced settings.
+// - Supports improvement of existing values (if isImprove = true), as well as generating entirely new
+//   values (if isImprove = false).
+//
+// High-Level Steps:
+// 1. Prepare a prompt and context, including model parameters and field hints.
+// 2. Depending on the field type, generate or improve the value.
+// 3. If the field is of a special type (SEO, structured_text, gallery, file), handle accordingly.
+// 4. Recursively handle blocks for structured or rich text fields, if any.
+// 5. Parse and return the final field value back to the caller.
+//********************************************************************************************
+
 import OpenAI from 'openai';
 import { ctxParamsType } from '../../../entrypoints/Config/ConfigScreen';
 import generateUploadOnPrompt, {
@@ -14,6 +39,46 @@ import { htmlToStructuredText } from 'datocms-html-to-structured-text';
 
 const localeSelect = locale.getByTag;
 
+/**
+ * generateFieldValue
+ * ------------------
+ * Main exported function that, given a prompt, field type, and current field value,
+ * uses OpenAI to generate or improve the field value.
+ *
+ * Parameters:
+ * @param blockLevel (number): Current depth of block generation. Used to limit nested block complexity.
+ * @param itemTypes (Record<string, ItemType>): Available item (block) types.
+ * @param prompt (string): The user's prompt guiding content generation.
+ * @param fieldType (string): The type of the field to generate/improve (e.g., single_line, file, etc.).
+ * @param pluginParams (ctxParamsType): Plugin parameters, including API keys, model, and advanced settings.
+ * @param locale (string): The locale in which we generate/improve the value.
+ * @param datoKey (string): DatoCMS API token to upload assets if needed.
+ * @param selectedResolution (availableResolutions): Chosen resolution for image generation (for assets).
+ * @param currentFieldValue (unknown): The current value of the field, if any.
+ * @param alert (Function): A function to show alerts in the CMS UI.
+ * @param isImprove (boolean): Whether we are improving an existing value (true) or generating new (false).
+ * @param fieldInfo (object): Information about the current field (name, apiKey, validators, hint).
+ * @param formValues (Record<string, unknown>): The entire record's form values, used for context.
+ * @param blockInfo (object|null): If this field is part of a block, info about that block.
+ * @param parentBlockInfo (object|null): If we are nested inside a block, info about the parent block.
+ * @param fieldsetInfo (object|null): Information about the fieldset this field belongs to, if any.
+ * @param modelName (string): Name of the model containing this field.
+ *
+ * Returns: Promise<unknown> - The generated or improved field value.
+ *
+ * Process:
+ * 1. Setup OpenAI client with API key.
+ * 2. If localized, extract the relevant value for this locale.
+ * 3. If the field is a file or gallery, handle image generation by calling `generateUploadOnPrompt`.
+ * 4. If it's structured_text or rich_text, handle block-level generation and recursion.
+ * 5. For simple text fields, build a context prompt and ask the model for a generated value.
+ * 6. Parse the resulting GPT response using `parseGptValue`.
+ * 7. Return the final processed value.
+ *
+ * Notes:
+ * - This code is very sensitive and complex; minimal changes have been made apart from commenting.
+ * - Each field type and scenario is handled case-by-case, following logic that existed previously.
+ */
 const generateFieldValue = async (
   blockLevel: number,
   itemTypes: Partial<Record<string, ItemType>>,
@@ -25,7 +90,7 @@ const generateFieldValue = async (
   selectedResolution: availableResolutions,
   currentFieldValue: unknown,
   alert: (message: string) => Promise<void>,
-  isImprovement: boolean,
+  isImprove: boolean,
   fieldInfo: {
     name: string;
     apiKey: string;
@@ -50,6 +115,7 @@ const generateFieldValue = async (
   } | null,
   modelName: string
 ) => {
+  // Initialize OpenAI client
   const openai = new OpenAI({
     apiKey: pluginParams.apiKey,
     dangerouslyAllowBrowser: true,
@@ -57,7 +123,7 @@ const generateFieldValue = async (
 
   let fieldValue = currentFieldValue;
 
-  //if the field is localized, get this current locale value instead:
+  // If the field is localized (object with multiple locales), pick the value for the current locale
   if (
     fieldValue &&
     typeof fieldValue === 'object' &&
@@ -69,6 +135,12 @@ const generateFieldValue = async (
 
   let fieldTypePrompt = ' Return the response in the format of ';
 
+  //--------------------------------------------------------------------------------------------
+  // Handle file fields (single image generation)
+  // If the field is a file:
+  // - If block level > 0 and blockAssetsGeneration is 'null', return null (do not generate)
+  // - Otherwise, generate a prompt for DALL-E and generate an image asset.
+  //--------------------------------------------------------------------------------------------
   if (fieldType === 'file') {
     if (
       pluginParams.advancedSettings.blockAssetsGeneration === 'null' &&
@@ -81,6 +153,7 @@ const generateFieldValue = async (
       messages: [
         {
           role: 'system',
+          // Construct a meta-prompt to generate a perfect DALL-E prompt for this specific field
           content:
             basePrompt +
             'Generate the perfect prompt for a field ' +
@@ -122,8 +195,7 @@ const generateFieldValue = async (
 
     const metaPrompt = contextCompletion.choices[0].message.content!;
 
-    console.log({ metaPrompt });
-
+    // Generate the image using Dall-E:
     return (
       await generateUploadOnPrompt(
         metaPrompt,
@@ -136,6 +208,10 @@ const generateFieldValue = async (
     )[0];
   }
 
+  //--------------------------------------------------------------------------------------------
+  // Handle gallery fields (multiple images):
+  // Similar logic to 'file' field but adds newly generated assets to the existing array.
+  //--------------------------------------------------------------------------------------------
   if (fieldType === 'gallery') {
     if (
       pluginParams.advancedSettings.blockAssetsGeneration === 'null' &&
@@ -143,11 +219,14 @@ const generateFieldValue = async (
     ) {
       return null;
     }
+
     let galleryArray = fieldValue as Array<Upload>;
     if (!galleryArray || !galleryArray.length) {
       galleryArray = [];
     }
+
     try {
+      // Generate a prompt for the gallery images
       const contextCompletion = await openai.chat.completions.create({
         messages: [
           {
@@ -194,9 +273,7 @@ const generateFieldValue = async (
       });
 
       const metaPrompt = contextCompletion.choices[0].message.content!;
-
-      console.log({ metaPrompt });
-
+      // Generate one more image and add it to the gallery array
       galleryArray.push(
         (
           await generateUploadOnPrompt(
@@ -221,7 +298,13 @@ const generateFieldValue = async (
     return galleryArray;
   }
 
+  //--------------------------------------------------------------------------------------------
+  // Handle structured_text fields:
+  // For structured_text, generate a base HTML document and convert it into structured text,
+  // then possibly insert blocks determined by GPT.
+  //--------------------------------------------------------------------------------------------
   if (fieldType === 'structured_text') {
+    // Create a trimmed fieldInfo to avoid passing large validators for the next steps
     const trimmedFieldInfo = {
       name: fieldInfo.name,
       apiKey: fieldInfo.apiKey,
@@ -229,6 +312,7 @@ const generateFieldValue = async (
       hint: fieldInfo.hint,
     };
 
+    // Step 1: Generate a base HTML using the wysiwyg prompt
     const baseDocument = await generateFieldValue(
       0,
       itemTypes,
@@ -241,7 +325,7 @@ const generateFieldValue = async (
       selectedResolution,
       '',
       alert,
-      isImprovement,
+      isImprove,
       trimmedFieldInfo,
       formValues,
       null,
@@ -250,8 +334,10 @@ const generateFieldValue = async (
       modelName
     );
 
+    // Convert the generated HTML to structured text
     const structuredTextBaseDocument = await htmlToStructuredText(baseDocument);
 
+    // Helper functions to reformat structured text nodes
     function replaceValueWithText(obj: any): any {
       if (Array.isArray(obj)) {
         return obj.map((item) => replaceValueWithText(item));
@@ -281,6 +367,7 @@ const generateFieldValue = async (
         const newObj: any = {};
         for (const [key, value] of Object.entries(obj)) {
           if (key === 'type' && value === 'span') {
+            // Skip adding 'type' if it's 'span'
             continue;
           }
           newObj[key] = removeSpanType(value);
@@ -297,13 +384,16 @@ const generateFieldValue = async (
 
     const structuredTextBase = replaceValueWithText(cleanedDocument.children);
 
+    // Extract validators to find allowed blocks
     const validators = JSON.parse(fieldInfo.validatiors!);
     const structuredTextBlocks = validators.structured_text_blocks.item_types;
 
     if (!structuredTextBlocks.length) {
+      // If no blocks are allowed, just return the structured text base
       return structuredTextBase;
     }
 
+    // If blocks are allowed, we must figure out which blocks to add
     const blocksWithNames = structuredTextBlocks.map((block: string) => {
       return {
         name: itemTypes[block]!.attributes.name!,
@@ -312,6 +402,7 @@ const generateFieldValue = async (
       };
     });
 
+    // Ask GPT which blocks to insert into the HTML
     const blockPrompt =
       basePrompt +
       ' Based on the prompt ' +
@@ -337,8 +428,7 @@ const generateFieldValue = async (
       blockPromptResponse.choices[0].message.content!
     );
 
-    console.log({ blockTypeResponses });
-
+    // For each suggested block, generate its content
     const blockArray: any[] = [];
 
     for (const block of blockTypeResponses) {
@@ -353,7 +443,7 @@ const generateFieldValue = async (
         selectedResolution,
         blockArray,
         alert,
-        isImprovement,
+        isImprove,
         fieldInfo,
         formValues,
         {
@@ -368,6 +458,7 @@ const generateFieldValue = async (
       );
     }
 
+    // Reformat the generated blocks for structured text
     const structuredFormatedBlockArray = blockArray.map((block) => {
       const blockCopy = { ...block };
       delete blockCopy.blockModelId;
@@ -379,6 +470,7 @@ const generateFieldValue = async (
       };
     });
 
+    // Insert the generated blocks back into the original structured text at appropriate positions
     const finalPrompt =
       basePrompt +
       ' insert into the following JSON array of objects :' +
@@ -401,16 +493,20 @@ const generateFieldValue = async (
       finalCompletion.choices[0].message.content!
     );
 
-    console.log({ finalResponse });
-
     return finalResponse;
   }
 
+  //--------------------------------------------------------------------------------------------
+  // Handle rich_text fields:
+  // If blockInfo is provided, we are dealing with modular content inside a rich_text.
+  // This involves generating content for each field in a block or auto-selecting blocks.
+  //--------------------------------------------------------------------------------------------
   if (!!blockInfo) {
     const client = buildClient({
       apiToken: datoKey,
     });
 
+    // If the block type is "auto_select_gpt_plugin", GPT decides which blocks to create
     if (blockInfo.apiKey === 'auto_select_gpt_plugin') {
       const availableFieldNames = blockInfo.availableBlocks.map((blockId) => {
         return {
@@ -420,6 +516,7 @@ const generateFieldValue = async (
         };
       });
 
+      // Ask GPT which blocks to create and generate them
       const blockPrompt =
         basePrompt +
         ' Based on the prompt ' +
@@ -428,8 +525,6 @@ const generateFieldValue = async (
         JSON.stringify(availableFieldNames, null, 2) +
         ' return the response as an array of objects as a valid JSON, deleting the blocks that should not be created for this prompt, and keeping the ones that should be created. You can repeat a block more times than one if you think it is necessary for the prompt' +
         ' add to the following object a "prompt" key to each block, the prompt value should be an instruction, a prompt, to generate the value, always starting with "Generate a block that..."';
-
-      console.log({ blockPrompt });
 
       const blockTypeCompletion = await openai.chat.completions.create({
         messages: [
@@ -445,10 +540,9 @@ const generateFieldValue = async (
         blockTypeCompletion.choices[0].message.content!
       );
 
-      console.log({ blockTypeResponses });
-
       const currentValueCopy = fieldValue as Array<Record<string, any>>;
 
+      // For each chosen block, generate its content recursively
       for (const block of blockTypeResponses) {
         await generateFieldValue(
           blockLevel,
@@ -461,7 +555,7 @@ const generateFieldValue = async (
           selectedResolution,
           currentValueCopy,
           alert,
-          isImprovement,
+          isImprove,
           fieldInfo,
           formValues,
           {
@@ -479,10 +573,12 @@ const generateFieldValue = async (
       return currentValueCopy;
     }
 
+    // If we have a known block type:
     const fieldValueCopy = fieldValue as Array<Record<string, any>>;
-
     const fields = await client.fields.list(blockInfo.blockModelId);
     const orderedFields = fields.sort((a, b) => a.position - b.position);
+
+    // Create a dictionary for each field in the block, mapping api_key to field info
     const fieldTypeDictionary = orderedFields.reduce((acc, field) => {
       acc[field.api_key] = {
         type: field.appearance.editor,
@@ -499,11 +595,15 @@ const generateFieldValue = async (
 
     const attributes = { ...fieldTypeDictionary };
 
+    // For each field in the block, generate a value
     for (const field in fieldTypeDictionary) {
       if (fieldTypeDictionary[field].type === 'rich_text') {
+        // If nested blocks exist and we exceed max depth, return null
         if (blockLevel > pluginParams.advancedSettings.blockGenerateDepth - 1) {
           return null;
         }
+
+        // Recursively generate the rich_text block fields
         const fieldValue = await generateFieldValue(
           blockLevel + 1,
           itemTypes,
@@ -515,7 +615,7 @@ const generateFieldValue = async (
           selectedResolution,
           [],
           alert,
-          isImprovement,
+          isImprove,
           {
             name: field,
             apiKey: field,
@@ -539,6 +639,7 @@ const generateFieldValue = async (
         );
         attributes[field] = fieldValue;
       } else {
+        // For other field types in this block:
         const fieldValue = await generateFieldValue(
           blockLevel + 1,
           itemTypes,
@@ -555,7 +656,7 @@ const generateFieldValue = async (
           selectedResolution,
           null,
           alert,
-          isImprovement,
+          isImprove,
           {
             name: field,
             apiKey: field,
@@ -576,6 +677,7 @@ const generateFieldValue = async (
       }
     }
 
+    // Append the generated block with all fields resolved to the field value array
     fieldValueCopy.push({
       itemTypeId: blockInfo.blockModelId,
       ...attributes,
@@ -584,6 +686,11 @@ const generateFieldValue = async (
     return fieldValueCopy;
   }
 
+  //--------------------------------------------------------------------------------------------
+  // Handle default text fields:
+  // If none of the special conditions apply, we proceed with default text field logic.
+  // This involves using a field type prompt from fieldPrompt and generating/improving the value.
+  //--------------------------------------------------------------------------------------------
   const fieldPromptObject = pluginParams.prompts?.fieldPrompts.single_line
     ? pluginParams.prompts?.fieldPrompts
     : fieldPrompt;
@@ -594,21 +701,18 @@ const generateFieldValue = async (
       fieldPrompt[fieldType as keyof typeof fieldPrompt]
     )
   ) {
-    return null; //HERE
+    return null;
   }
 
   fieldTypePrompt +=
     fieldPromptObject[fieldType as keyof typeof fieldPrompt] ||
     fieldPrompt[fieldType as keyof typeof fieldPrompt];
 
-  let formattedPrompt = pluginParams.prompts?.basePrompt || basePrompt;
-
+  // Prepare the record context as JSON without internalLocales for clarity
   const recordContextJson = formValues;
-
   delete recordContextJson.internalLocales;
 
-  console.log({ prompt });
-
+  // Generate a meta prompt to gather context and produce the final prompt to GPT
   const contextCompletion = await openai.chat.completions.create({
     messages: [
       {
@@ -654,11 +758,10 @@ const generateFieldValue = async (
 
   const metaPrompt = contextCompletion.choices[0].message.content;
 
-  console.log({ metaPrompt });
+  let formattedPrompt = pluginParams.prompts?.basePrompt || basePrompt;
 
-  console.log({ fieldValue });
-
-  if (!isImprovement) {
+  // If we are generating a new value:
+  if (!isImprove) {
     formattedPrompt +=
       fieldTypePrompt +
       ' what you should do is ' +
@@ -677,6 +780,7 @@ const generateFieldValue = async (
       ' translate your response to ' +
       localeSelect(locale).name;
   } else {
+    // If we are improving existing value:
     formattedPrompt +=
       ' Improove on the previous field value that was ' +
       (typeof fieldValue === 'object'
@@ -703,8 +807,7 @@ const generateFieldValue = async (
       fieldTypePrompt;
   }
 
-  console.log({ formattedPrompt });
-
+  // Request a response from OpenAI with the final formatted prompt
   const completion = await openai.chat.completions.create({
     messages: [
       {
@@ -715,6 +818,7 @@ const generateFieldValue = async (
     model: pluginParams.gptModel,
   });
 
+  // Parse the returned value using parseGptValue
   const parsedValue = await parseGptValue(
     fieldType,
     completion.choices[0].message.content!,
@@ -733,8 +837,6 @@ const generateFieldValue = async (
       error
     );
   });
-
-  console.log({ parsedValue });
 
   return parsedValue;
 };
