@@ -314,8 +314,6 @@ async function translateStructuredTextValue(
     apiToken
   );
 
-  console.log({ returnedTextValues });
-
   // Reconstruct the object with the translated inline texts
   const reconstructedObject = reconstructObject(
     fieldValueWithoutBlocks,

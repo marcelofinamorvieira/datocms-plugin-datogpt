@@ -6,7 +6,7 @@
 // or improvement, of all fields.
 //********************************************************************************************
 
-import { RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
+import { Field, RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
 import { Button, Canvas, Spinner } from 'datocms-react-ui';
 import { useState } from 'react';
 import { ctxParamsType } from '../Config/ConfigScreen';
@@ -112,17 +112,88 @@ async function generateAllFields(
     modifiedPluginParams.advancedSettings.seoGenerateAsset = false;
   }
 
+  const fieldObjectForThisItemType = Object.fromEntries(
+    Object.entries(ctx.fields).filter(
+      ([_, field]) =>
+        field?.relationships.item_type.data?.id === ctx.itemType.id
+    )
+  );
+
+  const fieldsetForThisItemType = Object.fromEntries(
+    Object.entries(ctx.fieldsets).filter(
+      ([_, fieldset]) =>
+        fieldset?.relationships.item_type.data?.id === ctx.itemType.id
+    )
+  );
+
+  function orderFieldsByPosition(
+    fields: Record<string, any>,
+    fieldsets: Record<string, any>
+  ): any[] {
+    const NO_FIELDSET = 'NO_FIELDSET'; // Use a string to represent no fieldset
+
+    const fieldsetsArr = Object.values(fieldsets).map((f: any) => ({
+      id: f.id,
+      position: f.attributes.position,
+    }));
+
+    const fieldsByFieldset: Record<string, any[]> = { [NO_FIELDSET]: [] };
+
+    for (const f of Object.values(fields)) {
+      const fsId = f.relationships?.fieldset?.data?.id || NO_FIELDSET;
+      if (!fieldsByFieldset[fsId]) {
+        fieldsByFieldset[fsId] = [];
+      }
+      fieldsByFieldset[fsId].push(f);
+    }
+
+    for (const fsId in fieldsByFieldset) {
+      fieldsByFieldset[fsId].sort(
+        (a, b) => a.attributes.position - b.attributes.position
+      );
+    }
+
+    fieldsetsArr.sort((a, b) => a.position - b.position);
+
+    const topLevelFields = fieldsByFieldset[NO_FIELDSET].map((field: any) => ({
+      type: 'field',
+      position: field.attributes.position,
+      fields: [field],
+    }));
+
+    const topLevelFieldsets = fieldsetsArr.map((fs) => ({
+      type: 'fieldset',
+      position: fs.position,
+      fields: fieldsByFieldset[fs.id] || [],
+    }));
+
+    const combined = [...topLevelFields, ...topLevelFieldsets].sort(
+      (a, b) => a.position - b.position
+    );
+
+    const result: any[] = [];
+    for (const item of combined) {
+      for (const f of item.fields) {
+        result.push(f);
+      }
+    }
+
+    return result;
+  }
+
   // Sort fields by their position for predictable operation order.
-  const fieldsObject = Object.entries(ctx.fields)
-    .sort((a, b) => a[1]!.attributes.position - b[1]!.attributes.position)
-    .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+  const fieldArray = orderFieldsByPosition(
+    fieldObjectForThisItemType,
+    fieldsetForThisItemType
+  );
 
   const currentFormValues = ctx.formValues;
 
   // Loop over each field:
-  for (const field in fieldsObject) {
-    const fieldType = ctx.fields[field]!.attributes.appearance.editor;
-    const fieldValue = ctx.formValues[ctx.fields[field]!.attributes.api_key];
+  for (const fieldItem of fieldArray) {
+    const field = fieldItem.attributes.api_key;
+    const fieldType = fieldItem.attributes.appearance.editor;
+    const fieldValue = ctx.formValues[field];
 
     // Determine if this field should have generation/improvement applied.
     const shouldProcess =
@@ -137,14 +208,14 @@ async function generateAllFields(
     if (!shouldProcess) continue;
 
     // Gather fieldset info if available for better contextual prompts.
-    const fieldsetInfo = ctx.fields[field]!.relationships.fieldset.data?.id
+    const fieldsetInfo = fieldItem.relationships.fieldset.data?.id
       ? {
           name:
-            ctx.fieldsets[ctx.fields[field]!.relationships.fieldset.data?.id]
-              ?.attributes.title ?? null,
+            ctx.fieldsets[fieldItem.relationships.fieldset.data?.id]?.attributes
+              .title ?? null,
           hint:
-            ctx.fieldsets[ctx.fields[field]!.relationships.fieldset.data?.id]
-              ?.attributes.hint ?? null,
+            ctx.fieldsets[fieldItem.relationships.fieldset.data?.id]?.attributes
+              .hint ?? null,
         }
       : null;
 
@@ -162,13 +233,13 @@ async function generateAllFields(
       ctx.alert,
       isImprove,
       {
-        name: ctx.fields[field]!.attributes.label,
-        apiKey: ctx.fields[field]!.attributes.api_key,
-        validatiors: ctx.fields[field]!.attributes.validators
-          ? JSON.stringify(ctx.fields[field]!.attributes.validators, null, 2)
+        name: fieldItem.attributes.label,
+        apiKey: field,
+        validatiors: fieldItem.attributes.validators
+          ? JSON.stringify(fieldItem.attributes.validators, null, 2)
           : null,
-        hint: ctx.fields[field]!.attributes.hint
-          ? JSON.stringify(ctx.fields[field]!.attributes.hint, null, 2)
+        hint: fieldItem.attributes.hint
+          ? JSON.stringify(fieldItem.attributes.hint, null, 2)
           : null,
       },
       currentFormValues,
@@ -179,17 +250,19 @@ async function generateAllFields(
     );
 
     // Check if the field is localized to set the value appropriately.
-    const fieldIsLocalized = ctx.fields[field]!.attributes.localized;
-    currentFormValues[ctx.fields[field]!.attributes.api_key] = fieldIsLocalized
+    const fieldIsLocalized = fieldItem.attributes.localized;
+    currentFormValues[field] = fieldIsLocalized
       ? { [ctx.locale]: generatedFieldValue }
       : generatedFieldValue;
 
+    console.log(
+      fieldIsLocalized ? field + '.' + ctx.locale : field,
+      generatedFieldValue
+    );
     // Update the field in the CMS form with the generated/improved value.
     ctx.setFieldValue(
-      ctx.fields[field]!.attributes.api_key,
-      fieldIsLocalized
-        ? { [ctx.locale]: generatedFieldValue }
-        : generatedFieldValue
+      fieldIsLocalized ? field + '.' + ctx.locale : field,
+      generatedFieldValue
     );
   }
 }

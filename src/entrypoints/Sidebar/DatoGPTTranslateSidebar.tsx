@@ -124,8 +124,6 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
     }
   }
 
-  console.log(ctx.theme);
-
   return (
     <Canvas ctx={ctx}>
       <AnimatePresence mode="wait">
