@@ -233,7 +233,7 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
                 <div
                   key={index}
                   onClick={() => {
-                    ctx.scrollToField(bubble.fieldPath, bubble.locale);
+                    ctx.scrollToField(bubble.fieldPath, bubble.locale); //TODO i think the field pathhere is wrong
                   }}
                 >
                   <ChatBubble
