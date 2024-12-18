@@ -22,9 +22,10 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
   return (
     <div
       style={{
-        marginBottom: '24px',
-        borderBottom: '1px solid #ccc',
-        paddingBottom: '24px',
+        paddingBottom: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
       }}
     >
       <h2

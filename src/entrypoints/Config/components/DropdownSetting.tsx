@@ -17,6 +17,15 @@
 //
 //********************************************************************************************
 
+import {
+  Button,
+  CaretDownIcon,
+  CaretUpIcon,
+  Dropdown,
+  DropdownMenu,
+  DropdownOption,
+} from 'datocms-react-ui';
+
 type DropdownSettingProps = {
   label: string;
   selectedValue: string;
@@ -30,28 +39,38 @@ export function DropdownSetting({
   options,
   onSelect,
 }: DropdownSettingProps) {
+  console.log(options);
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'baseline',
+      }}
+    >
       <label
         style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}
       >
         {label}
       </label>
-      <select
-        style={{
-          padding: '8px',
-          borderRadius: '4px',
-          border: '1px solid #ccc',
-        }}
-        value={selectedValue}
-        onChange={(e) => onSelect(e.target.value)}
+      <Dropdown
+        renderTrigger={({ open, onClick }) => (
+          <Button
+            onClick={onClick}
+            rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
+          >
+            {selectedValue}
+          </Button>
+        )}
       >
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
-      </select>
+        <DropdownMenu>
+          {options.map((opt) => (
+            <DropdownOption key={opt} onClick={() => onSelect(opt)}>
+              {opt}
+            </DropdownOption>
+          ))}
+        </DropdownMenu>
+      </Dropdown>
     </div>
   );
 }
