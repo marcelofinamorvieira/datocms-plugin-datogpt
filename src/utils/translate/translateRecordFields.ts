@@ -88,7 +88,11 @@ export async function translateRecordFields(
       }
 
       // Inform the sidebar that translation for this field-locale is starting
-      options.onStart?.(fieldLabel, locale, field!.attributes.api_key);
+      options.onStart?.(
+        fieldLabel,
+        locale,
+        field!.attributes.api_key + '.' + locale
+      );
 
       // Determine field type prompt
       let fieldTypePrompt = 'Return the response in the format of ';

@@ -15,9 +15,6 @@ import { ChatbubbleGenerate } from '../../components/DatoGPTPrompt/messaging/Cha
 
 //-------------------------------------------
 // Async function: generateAllFields
-//
-// Modified to accept callbacks onStart/onComplete to track field generation progress.
-// Calls onStart before generating each field and onComplete after done.
 //-------------------------------------------
 async function generateAllFields(
   ctx: RenderItemFormSidebarPanelCtx,
@@ -139,7 +136,10 @@ async function generateAllFields(
         }
       : null;
 
-    callbacks?.onStart?.(fieldItem.attributes.label, field);
+    const fieldIsLocalized = fieldItem.attributes.localized;
+    const fieldPath = fieldIsLocalized ? field + '.' + ctx.locale : field;
+
+    callbacks?.onStart?.(fieldItem.attributes.label, fieldPath);
 
     const generatedFieldValue = await generateFieldValue(
       0,
@@ -170,15 +170,11 @@ async function generateAllFields(
       ctx.itemType.attributes.name
     );
 
-    const fieldIsLocalized = fieldItem.attributes.localized;
     currentFormValues[field] = fieldIsLocalized
       ? { [ctx.locale]: generatedFieldValue }
       : generatedFieldValue;
 
-    ctx.setFieldValue(
-      fieldIsLocalized ? field + '.' + ctx.locale : field,
-      generatedFieldValue
-    );
+    ctx.setFieldValue(fieldPath, generatedFieldValue);
 
     callbacks?.onComplete?.(fieldItem.attributes.label);
   }
@@ -355,7 +351,7 @@ export default function DatoGPTSidebar({
                 <div
                   key={index}
                   onClick={() => {
-                    ctx.scrollToField(bubble.fieldPath); //TODO this is wrong for localized fields, right for unlocalized fields
+                    ctx.scrollToField(bubble.fieldPath);
                   }}
                 >
                   <ChatbubbleGenerate
