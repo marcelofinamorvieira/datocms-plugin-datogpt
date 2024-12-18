@@ -183,7 +183,6 @@ const MediaPrompting = ({
       style={{
         display: 'flex',
         gap: '4px',
-        marginBottom: '24px',
         width: '100%',
       }}
     >

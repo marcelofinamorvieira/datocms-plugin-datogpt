@@ -127,7 +127,7 @@ function BlockTypeSelector({
   >;
 }) {
   return (
-    <div style={{ height: '100%', fontSize: 'medium' }}>
+    <div style={{ height: '100%', fontSize: 'small' }}>
       <Dropdown
         renderTrigger={({ open, onClick }) => (
           <Button
@@ -214,7 +214,6 @@ const ModularContentPrompting = ({
       style={{
         display: 'flex',
         gap: '4px',
-        marginBottom: '24px',
         width: '100%',
       }}
     >
