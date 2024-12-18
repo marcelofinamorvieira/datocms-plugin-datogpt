@@ -234,6 +234,14 @@ function DatoGPTPromptPrompting({
   return null;
 }
 
+//Function to get the value at a given path, used for field values of fields inside blocks
+function getValueAtPath(obj: any, path: string): any {
+  return path.split('.').reduce((acc: any, key: string) => {
+    const index = Number(key);
+    return Number.isNaN(index) ? acc?.[key] : acc?.[index];
+  }, obj);
+}
+
 /**
  * -------------------------------------------------------------------------------------------
  * Main DatoGPTPrompt Component
@@ -266,7 +274,10 @@ function DatoGPTPromptPrompting({
 export default function DatoGPTPrompt({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
   const fieldType = ctx.field.attributes.appearance.editor;
-  const fieldValue = ctx.formValues[ctx.field.attributes.api_key];
+  let fieldValue =
+    ctx.formValues[ctx.field.attributes.api_key] ||
+    (ctx.parentField?.attributes.localized && //for fields inside blocks
+      getValueAtPath(ctx.formValues, ctx.fieldPath));
 
   // Animation controls for the icon
   const controls = useAnimation();

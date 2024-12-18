@@ -131,7 +131,7 @@ const ModularContentOptions = ({
         className={classNames(s.buttonsContainer)}
       >
         <Button buttonSize="xxs" buttonType="muted">
-          Prompt based on current value
+          Prompt to improve current blocks
         </Button>
       </div>
 
