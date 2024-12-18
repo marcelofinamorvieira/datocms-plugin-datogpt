@@ -193,6 +193,7 @@ async function translateSeoFieldValue(
  * @param toLocale Target locale.
  * @param openai OpenAI client.
  * @param apiToken DatoCMS API token to fetch block fields info.
+ * @param options Options object containing onStart and onComplete callbacks for translationbubbles for bulk translation on the sidebar
  */
 async function translateBlockValue(
   fieldValue: unknown,
@@ -215,25 +216,25 @@ async function translateBlockValue(
     }, {} as Record<string, string>);
 
     // Translate each field of the block
-    for (const f in block) {
+    for (const field in block) {
       if (
-        f === 'itemTypeId' ||
-        f === 'originalIndex' ||
-        f === 'blockModelId' ||
-        f === 'type' ||
-        f === 'children'
+        field === 'itemTypeId' ||
+        field === 'originalIndex' ||
+        field === 'blockModelId' ||
+        field === 'type' ||
+        field === 'children'
       ) {
         continue;
       }
 
       let nestedFieldValuePrompt = ' Return the response in the format of ';
-      nestedFieldValuePrompt += fieldTypeDictionary[f];
+      nestedFieldValuePrompt += fieldTypeDictionary[field];
 
-      block[f] = await translateFieldValue(
-        block[f],
+      block[field] = await translateFieldValue(
+        block[field],
         pluginParams,
         toLocale,
-        fieldTypeDictionary[f],
+        fieldTypeDictionary[field],
         openai,
         nestedFieldValuePrompt,
         apiToken
@@ -392,6 +393,7 @@ async function translateDefaultFieldValue(
  * @param openai The OpenAI client.
  * @param fieldTypePrompt Additional prompt instructions.
  * @param apiToken DatoCMS API token.
+ * @param options Options object containing onStart and onComplete callbacks for translationbubbles for bulk translation on the sidebar
  * @returns The translated field value.
  */
 export async function translateFieldValue(
@@ -401,7 +403,11 @@ export async function translateFieldValue(
   fieldType: string,
   openai: OpenAI,
   fieldTypePrompt: string,
-  apiToken: string
+  apiToken: string,
+  options?: {
+    onStart?: (fieldLabel: string, locale: string, fieldPath: string) => void;
+    onComplete?: (fieldLabel: string, locale: string) => void;
+  }
 ): Promise<unknown> {
   // If field doesn't need translation or is empty, return original value
   if (fieldsThatDontNeedTranslation.includes(fieldType) || !fieldValue) {

@@ -113,7 +113,8 @@ export async function translateRecordFields(
         fieldType,
         openai,
         fieldTypePrompt,
-        ctx.currentUserAccessToken!
+        ctx.currentUserAccessToken!,
+        { onStart: options.onStart, onComplete: options.onComplete }
       );
 
       // Update form values with the translated field
