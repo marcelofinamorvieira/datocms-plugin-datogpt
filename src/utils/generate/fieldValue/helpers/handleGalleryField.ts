@@ -7,7 +7,10 @@
 import OpenAI from 'openai';
 import { ctxParamsType } from '../../../../entrypoints/Config/ConfigScreen';
 import { basePrompt } from '../../../../prompts/BasePrompt';
-import generateUploadOnPrompt, { Upload, availableResolutions } from '../../asset/generateUploadOnPrompt';
+import generateUploadOnPrompt, {
+  Upload,
+  availableResolutions,
+} from '../../asset/generateUploadOnPrompt';
 
 export async function handleGalleryField(
   blockLevel: number,
@@ -39,6 +42,10 @@ export async function handleGalleryField(
     blockLevel > 0
   ) {
     return null;
+  }
+
+  if (isImprove) {
+    return fieldValue;
   }
 
   let galleryArray = fieldValue as Array<Upload>;

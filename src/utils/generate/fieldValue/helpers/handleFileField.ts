@@ -43,6 +43,10 @@ export async function handleFileField(
     return null;
   }
 
+  if (isImprove) {
+    return fieldValue;
+  }
+
   const contextCompletion = await openai.chat.completions.create({
     messages: [
       {
