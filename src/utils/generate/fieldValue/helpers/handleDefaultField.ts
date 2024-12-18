@@ -133,7 +133,7 @@ export async function handleDefaultField(
       localeSelect(locale).name;
   } else {
     formattedPrompt +=
-      ' Improove on the previous field value that was ' +
+      ' Improve on the previous field value that was ' +
       (typeof fieldValue === 'object'
         ? JSON.stringify(fieldValue, null, 2)
         : fieldValue) +
