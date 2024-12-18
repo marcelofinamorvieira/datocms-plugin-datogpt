@@ -57,11 +57,118 @@ export async function handleRichTextBlock(
   });
 
   if (isImprove) {
-    //TODO: Implement improve prompt for rich_text blocks
-    return fieldValue;
+    if (!fieldValue || (Array.isArray(fieldValue) && fieldValue.length === 0)) {
+      return [];
+    }
+    console.log('fieldValue', fieldValue);
+    const fieldValueCopy = fieldValue as Array<Record<string, any>>;
+    const fields = await client.fields.list(fieldValueCopy[0].itemTypeId);
+    const orderedFields = fields.sort((a, b) => a.position - b.position);
+    const fieldTypeDictionary = orderedFields.reduce((acc, field) => {
+      acc[field.api_key] = {
+        type: field.appearance.editor,
+        validators: field.validators
+          ? JSON.stringify(field.validators, null, 2)
+          : null,
+        hint: field.hint ? JSON.stringify(field.hint, null, 2) : null,
+        availableBlocks:
+          (field.validators.rich_text_blocks as Record<string, string[]>)
+            ?.item_types ?? [],
+      };
+      return acc;
+    }, {} as Record<string, { type: string; validators: string | null; hint: string | null; availableBlocks: string[] }>);
+
+    const attributes = { ...fieldTypeDictionary };
+
+    for (const block of fieldValueCopy) {
+      for (const field in block) {
+        if (field === 'itemId' || field === 'itemTypeId') {
+          continue;
+        }
+        if (fieldTypeDictionary[field].type === 'rich_text') {
+          if (
+            blockLevel >
+            pluginParams.advancedSettings.blockGenerateDepth - 1
+          ) {
+            return null;
+          }
+          const fieldValue = await generateFieldValue(
+            blockLevel + 1,
+            itemTypes,
+            prompt,
+            fieldTypeDictionary[field].type,
+            pluginParams,
+            locale,
+            datoKey,
+            selectedResolution,
+            block[field],
+            alert,
+            isImprove,
+            {
+              name: field,
+              apiKey: field,
+              validatiors: fieldTypeDictionary[field].validators,
+              hint: fieldTypeDictionary[field].hint,
+            },
+            formValues,
+            {
+              name: field,
+              apiKey: 'auto_select_gpt_plugin',
+              blockModelId: fieldTypeDictionary[field].availableBlocks[0],
+              availableBlocks: fieldTypeDictionary[field].availableBlocks,
+            },
+            {
+              name: blockInfo.name,
+              apiKey: blockInfo.apiKey,
+              generatedFields: attributes,
+            },
+            fieldsetInfo,
+            modelName
+          );
+          block[field] = fieldValue;
+        } else {
+          const fieldValue = await generateFieldValue(
+            blockLevel + 1,
+            itemTypes,
+            prompt +
+              ' that is part of a ' +
+              blockInfo.name +
+              ' block, and is a ' +
+              fieldInfo.name +
+              ' field',
+            fieldTypeDictionary[field].type,
+            pluginParams,
+            locale,
+            datoKey,
+            selectedResolution,
+            block[field],
+            alert,
+            isImprove,
+            {
+              name: field,
+              apiKey: field,
+              validatiors: fieldTypeDictionary[field].validators,
+              hint: fieldTypeDictionary[field].hint,
+            },
+            formValues,
+            null,
+            {
+              name: blockInfo.name,
+              apiKey: blockInfo.apiKey,
+              generatedFields: attributes,
+            },
+            fieldsetInfo,
+            modelName
+          );
+          block[field] = fieldValue;
+        }
+      }
+    }
+
+    return fieldValueCopy;
   }
 
-  if (blockInfo.apiKey === 'auto_select_gpt_plugin') {
+  if (!isImprove && blockInfo.apiKey === 'auto_select_gpt_plugin') {
     const availableFieldNames = blockInfo.availableBlocks.map((blockId) => {
       return {
         name: itemTypes[blockId]!.attributes.name!,

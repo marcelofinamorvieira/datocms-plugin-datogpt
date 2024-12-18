@@ -44,6 +44,10 @@ export async function handleStructuredTextField(
   };
 
   if (isImprove) {
+    if (!fieldValue) {
+      //TODO: Also add is empty structured text 
+      return fieldValue;
+    }
     //TODO: Implement improve prompt for structured_text fields
     return fieldValue;
   }

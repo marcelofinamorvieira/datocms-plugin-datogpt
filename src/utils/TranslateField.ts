@@ -200,7 +200,11 @@ async function translateBlockValue(
   pluginParams: ctxParamsType,
   toLocale: string,
   openai: OpenAI,
-  apiToken: string
+  apiToken: string,
+  options?: {
+    onStart?: (fieldLabel: string, locale: string, fieldPath: string) => void;
+    onComplete?: (fieldLabel: string, locale: string) => void;
+  }
 ) {
   const cleanedFieldValue = deleteItemIdKeys(fieldValue);
   const client = buildClient({ apiToken: apiToken });
@@ -430,7 +434,8 @@ export async function translateFieldValue(
         pluginParams,
         toLocale,
         openai,
-        apiToken
+        apiToken,
+        options
       );
     case 'structured_text':
       return translateStructuredTextValue(
