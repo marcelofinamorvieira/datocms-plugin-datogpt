@@ -1,33 +1,34 @@
+//********************************************************************************************
+// ChatbubbleGenerate.tsx
+//
+// This component renders a single chat bubble representing the status of generating or improving fields
+// from the "Generate all fields" or "Improve all fields" action in the sidebar.
+//
+// Props:
+// - bubble: { fieldLabel: string; status: 'pending'|'done'; fieldPath: string; isImprove: boolean }
+//   isImprove: indicates if we are improving existing values (true) or generating new values (false).
+// - theme: Current theme provided by DatoCMS context for styling.
+// - index: The index of this bubble in the list.
+//
+// Behavior:
+// - If status is 'pending', display a spinning OpenAI icon and a message indicating "Generating..." or "Improving...".
+// - If status is 'done', display a static icon and a completed message.
+// - The text changes based on isImprove:
+//   - If isImprove = false: "Generating {fieldLabel}..."/"Generated {fieldLabel}"
+//   - If isImprove = true: "Improving {fieldLabel}..."/"Improved {fieldLabel}"
+//
+//********************************************************************************************
+
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AiOutlineOpenAI } from 'react-icons/ai';
 import { Theme } from 'datocms-plugin-sdk';
 
-/**
- * ChatbubbleTranslate.tsx
- *
- * This component renders a single chat bubble representing the translation status of a given field-locale pair.
- * It receives props describing the field being translated, the target locale, and the current status ('pending' or 'done').
- *
- * The component uses Framer Motion for animations:
- * - When status is 'pending', the bubble displays a spinning OpenAI icon to indicate ongoing translation.
- * - When the status changes to 'done', the bubble transitions smoothly, stops spinning, and can display a done state (e.g., a checkmark)..
- *
- * Props:
- * - bubble: {
- *     fieldLabel: string;   // The name/label of the field being translated.
- *     locale: string;       // The locale into which the field is being translated.
- *     status: 'pending'|'done'; // Current translation status for this field-locale.
- *     fieldPath: string;    // The path to the field in the CMS for potential navigation or identification.
- *   }
- * - theme: 'light'|'dark';  // Current theme provided by DatoCMS context for styling.
- * - index: number;          // Index of this bubble in the list for potential staggered animations.
- */
-
 type BubbleType = {
   fieldLabel: string;
   status: 'pending' | 'done';
   fieldPath: string;
+  isImprove: boolean;
 };
 
 type Props = {
@@ -67,8 +68,7 @@ export function ChatbubbleGenerate({ bubble, theme, index }: Props) {
   };
 
   // Conditional icon animation:
-  // - If status is 'pending', rotate continuously.
-  // - If status is 'done', stop rotation (no animation).
+  // If status is 'pending', rotate continuously. If 'done', no rotation.
   const iconAnimation =
     bubble.status === 'pending'
       ? {
@@ -84,13 +84,19 @@ export function ChatbubbleGenerate({ bubble, theme, index }: Props) {
           transition: { duration: 0.2 },
         };
 
-  // Icon to indicate status: same OpenAI icon, but spinning if pending, static if done
-  // Could switch icon if desired, but instructions say not to remove/change functionality.
-  // We'll keep the same icon and just stop spinning when done.
+  // Determine the text based on isImprove and status:
+  let actionVerb = 'Generating';
+  let actionVerbPast = 'Generated';
+
+  if (bubble.isImprove) {
+    actionVerb = 'Improving';
+    actionVerbPast = 'Improved';
+  }
+
   return (
     <AnimatePresence>
       <motion.div
-        key={bubble.fieldLabel}
+        key={bubble.fieldLabel + (bubble.isImprove ? '_improve' : '_generate')}
         variants={bubbleVariants}
         initial="initial"
         animate="animate"
@@ -133,11 +139,13 @@ export function ChatbubbleGenerate({ bubble, theme, index }: Props) {
             {bubble.status === 'pending' ? (
               <>
                 <strong style={statusStyle}>
-                  Generating {bubble.fieldLabel}...
+                  {actionVerb} {bubble.fieldLabel}...
                 </strong>
               </>
             ) : (
-              <>Generated {bubble.fieldLabel}</>
+              <>
+                {actionVerbPast} {bubble.fieldLabel}
+              </>
             )}
           </span>
         </div>

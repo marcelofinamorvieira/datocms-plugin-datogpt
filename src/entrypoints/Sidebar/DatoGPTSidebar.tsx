@@ -1,3 +1,10 @@
+//********************************************************************************************
+// DatoGPTSidebar.tsx
+//
+// This file renders a sidebar panel in DatoCMS that allows users to generate or improve all fields
+// at once using OpenAI, based on user prompts. It also displays a chat-like interface while processing.
+//********************************************************************************************
+
 import { Field, RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
 import { Button, Canvas, Spinner } from 'datocms-react-ui';
 import { useState } from 'react';
@@ -16,24 +23,41 @@ import { ChatbubbleGenerate } from '../../components/DatoGPTPrompt/messaging/Cha
 //-------------------------------------------
 // Async function: generateAllFields
 //-------------------------------------------
+// This function generates or improves all fields in the record depending on isImprove.
+// It loops through all fields of the current model, filters out fields that shouldn't be processed,
+// and calls generateFieldValue for each applicable field.
+//
+// Parameters:
+// - ctx: sidebar panel context
+// - pluginParams: configuration parameters
+// - prompt: user prompt entered in the textarea
+// - isImprove: boolean indicating if we are improving existing values (true) or generating new values (false)
+// - callbacks: optional, onStart/onComplete callbacks for UI updates
+//
+// onStart(fieldLabel, fieldPath, isImprove): called before generating/improving a field
+// onComplete(fieldLabel): called after generation/improvement finishes for a field
+//
+// This function ensures that after processing each field, the updated values are set in the CMS form.
 async function generateAllFields(
   ctx: RenderItemFormSidebarPanelCtx,
   pluginParams: ctxParamsType,
   prompt: string,
   isImprove: boolean,
   callbacks?: {
-    onStart?: (fieldLabel: string, fieldPath: string) => void;
+    onStart?: (fieldLabel: string, fieldPath: string, isImprove: boolean) => void;
     onComplete?: (fieldLabel: string) => void;
   }
 ) {
   const modifiedPluginParams = { ...pluginParams };
 
+  // If generateAssetsOnSidebarBulkGeneration is disabled, do not generate assets for SEO field:
   if (
     !modifiedPluginParams.advancedSettings.generateAssetsOnSidebarBulkGeneration
   ) {
     modifiedPluginParams.advancedSettings.seoGenerateAsset = false;
   }
 
+  // Get all fields for the current model
   const fieldObjectForThisItemType = Object.fromEntries(
     Object.entries(ctx.fields).filter(
       ([_, field]) =>
@@ -48,6 +72,7 @@ async function generateAllFields(
     )
   );
 
+  // orderFieldsByPosition: orders fields by their position and fieldsets if any, ensuring a stable generation order
   function orderFieldsByPosition(
     fields: Record<string, any>,
     fieldsets: Record<string, any>
@@ -115,6 +140,7 @@ async function generateAllFields(
     const fieldType = fieldItem.attributes.appearance.editor;
     const fieldValue = ctx.formValues[field];
 
+    // Decide if we should process this field depending on field type and settings:
     const shouldProcess =
       modifiedPluginParams.advancedSettings.generateValueFields.includes(
         fieldType as EditorType
@@ -139,8 +165,10 @@ async function generateAllFields(
     const fieldIsLocalized = fieldItem.attributes.localized;
     const fieldPath = fieldIsLocalized ? field + '.' + ctx.locale : field;
 
-    callbacks?.onStart?.(fieldItem.attributes.label, fieldPath);
+    // Notify the UI that we are starting on this field
+    callbacks?.onStart?.(fieldItem.attributes.label, fieldPath, isImprove);
 
+    // Generate or improve the field value
     const generatedFieldValue = await generateFieldValue(
       0,
       ctx.itemTypes,
@@ -176,55 +204,9 @@ async function generateAllFields(
 
     ctx.setFieldValue(fieldPath, generatedFieldValue);
 
+    // Notify the UI that we have completed this field
     callbacks?.onComplete?.(fieldItem.attributes.label);
   }
-}
-
-//-------------------------------------------
-// Internal helper component: PromptInputArea
-//-------------------------------------------
-function PromptInputArea({
-  prompts,
-  setPrompts,
-}: {
-  prompts: string;
-  setPrompts: React.Dispatch<React.SetStateAction<string>>;
-}) {
-  return (
-    <ReactTextareaAutosize
-      value={prompts}
-      onChange={(e) => setPrompts(e.target.value)}
-      name="prompts"
-      id="prompts"
-      placeholder="Prompt all fields"
-      className={s.promptsTextarea}
-    />
-  );
-}
-
-//-------------------------------------------
-// Internal helper component: GenerateButtons
-//-------------------------------------------
-function GenerateButtons({
-  handleGenerateAll,
-  handleImproveAll,
-  isLoading,
-}: {
-  handleGenerateAll: () => void;
-  handleImproveAll: () => void;
-  isLoading: boolean;
-}) {
-  return (
-    <>
-      <Button fullWidth onClick={handleGenerateAll} disabled={isLoading}>
-        {'Generate all fields'}
-      </Button>
-
-      <Button fullWidth onClick={handleImproveAll} disabled={isLoading}>
-        {'Improve all fields'}
-      </Button>
-    </>
-  );
 }
 
 export default function DatoGPTSidebar({
@@ -237,9 +219,10 @@ export default function DatoGPTSidebar({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [prompts, setPrompts] = useState('');
 
-  // New state for generation chat bubbles
+  // generationBubbles array now also used for improvements
+  // bubble now also includes isImprove to distinguish message displayed
   const [generationBubbles, setGenerationBubbles] = useState<
-    { fieldLabel: string; status: 'pending' | 'done'; fieldPath: string }[]
+    { fieldLabel: string; status: 'pending' | 'done'; fieldPath: string; isImprove: boolean }[]
   >([]);
 
   if (!pluginParams.apiKey || !pluginParams.gptModel) {
@@ -250,10 +233,10 @@ export default function DatoGPTSidebar({
     setIsLoading(true);
     setGenerationBubbles([]);
     generateAllFields(ctx, pluginParams, prompts, false, {
-      onStart: (fieldLabel, fieldPath) => {
+      onStart: (fieldLabel, fieldPath, isImprove) => {
         setGenerationBubbles((prev) => [
           ...prev,
-          { fieldLabel, status: 'pending', fieldPath },
+          { fieldLabel, status: 'pending', fieldPath, isImprove },
         ]);
       },
       onComplete: (fieldLabel) => {
@@ -280,10 +263,11 @@ export default function DatoGPTSidebar({
     setIsLoading(true);
     setGenerationBubbles([]);
     generateAllFields(ctx, pluginParams, prompts, true, {
-      onStart: (fieldLabel, fieldPath) => {
+      onStart: (fieldLabel, fieldPath, isImprove) => {
+        // Note: isImprove will be true here
         setGenerationBubbles((prev) => [
           ...prev,
-          { fieldLabel, status: 'pending', fieldPath },
+          { fieldLabel, status: 'pending', fieldPath, isImprove },
         ]);
       },
       onComplete: (fieldLabel) => {
@@ -318,12 +302,22 @@ export default function DatoGPTSidebar({
             transition={{ duration: 0.3 }}
             style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
           >
-            <PromptInputArea prompts={prompts} setPrompts={setPrompts} />
-            <GenerateButtons
-              handleGenerateAll={handleGenerateAll}
-              handleImproveAll={handleImproveAll}
-              isLoading={isLoading}
+            <ReactTextareaAutosize
+              value={prompts}
+              onChange={(e) => setPrompts(e.target.value)}
+              name="prompts"
+              id="prompts"
+              placeholder="Prompt all fields"
+              className={s.promptsTextarea}
             />
+            <Button fullWidth onClick={handleGenerateAll} disabled={isLoading}>
+              {'Generate all fields'}
+            </Button>
+
+            {/* Improve all fields button */}
+            <Button fullWidth onClick={handleImproveAll} disabled={isLoading}>
+              {'Improve all fields'}
+            </Button>
           </motion.div>
         ) : (
           <motion.div
