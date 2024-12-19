@@ -10,6 +10,16 @@ import { basePrompt } from '../../../../prompts/BasePrompt';
 import { availableResolutions } from '../../asset/generateUploadOnPrompt';
 import generateFieldValue from '../generateFieldValue';
 import { htmlToStructuredText } from 'datocms-html-to-structured-text';
+import {
+  extractTextValues,
+  insertObjectAtIndex,
+  reconstructObject,
+  removeIds,
+} from '../../../TranslateField';
+import locale from 'locale-codes';
+import { buildClient } from '@datocms/cma-client-browser';
+
+const localeSelect = locale.getByTag;
 
 export async function handleStructuredTextField(
   blockLevel: number,
@@ -44,12 +54,170 @@ export async function handleStructuredTextField(
   };
 
   if (isImprove) {
-    if (!fieldValue) {
-      //TODO: Also add is empty structured text 
+    let isEmptyStructuredText =
+      Array.isArray(fieldValue) &&
+      fieldValue.length === 1 &&
+      typeof fieldValue[0] === 'object' &&
+      fieldValue[0] !== null &&
+      'type' in fieldValue[0] &&
+      fieldValue[0].type === 'paragraph' &&
+      fieldValue[0].children.length === 1 &&
+      fieldValue[0].children[0].text === '';
+    if (
+      fieldValue &&
+      typeof fieldValue === 'object' &&
+      !Array.isArray(fieldValue) &&
+      locale in (fieldValue as Record<string, unknown>)
+    ) {
+      const fieldValueInThisLocale = (fieldValue as Record<string, unknown>)[
+        locale
+      ];
+
+      isEmptyStructuredText =
+        Array.isArray(fieldValueInThisLocale) &&
+        fieldValueInThisLocale.length === 1 &&
+        typeof fieldValueInThisLocale[0] === 'object' &&
+        fieldValueInThisLocale[0] !== null &&
+        'type' in fieldValueInThisLocale[0] &&
+        fieldValueInThisLocale[0].type === 'paragraph' &&
+        fieldValueInThisLocale[0].children.length === 1 &&
+        fieldValueInThisLocale[0].children[0].text === '';
+    }
+    if (!fieldValue || isEmptyStructuredText) {
       return fieldValue;
     }
-    //TODO: Implement improve prompt for structured_text fields
-    return fieldValue;
+    const noIdFieldValue = removeIds(fieldValue);
+
+    // Extract block nodes separately
+    const blockNodes = (noIdFieldValue as Array<unknown>).reduce(
+      (acc: any[], node: any, index: number) => {
+        if (node.type === 'block') {
+          acc.push({ ...node, originalIndex: index });
+        }
+        return acc;
+      },
+      []
+    );
+
+    // Filter out blocks to improve inline text first
+    const fieldValueWithoutBlocks = (noIdFieldValue as Array<unknown>).filter(
+      (node: any) => node.type !== 'block'
+    );
+
+    const textValues = extractTextValues(fieldValueWithoutBlocks);
+
+    let formattedPrompt = pluginParams.prompts?.basePrompt || basePrompt;
+
+    // Improve inline text array using OpenAI
+    const structuredTextcompletion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content:
+            formattedPrompt +
+            ' Given the following strings array: ' +
+            JSON.stringify(textValues, null, 2) +
+            ' Do not add or remove any strings. keeping the initial value of the strings as much as possible, only modify the strings you need to improve the value to follow the following instruction: what you should do is: ' +
+            prompt +
+            ' Do not add or remove any strings. keeping the initial value as much as possible, only modify the strings you need to improve the value to follow that instruction' +
+            ' Ignore empty strings and strings with just spaces (but do not remove them), keep them as they are.  Return the updated strings array in a valid JSON format do not remove spaces or empty strings. The number of returned strings should be the same as the number of strings in the original array ' +
+            ' translate your response to ' +
+            localeSelect(locale).name,
+        },
+      ],
+      model: pluginParams.gptModel,
+    });
+
+    const returnedTextValues = JSON.parse(
+      structuredTextcompletion.choices[0].message.content!
+    );
+
+    const client = buildClient({
+      apiToken: datoKey,
+    });
+
+    for (const node of blockNodes) {
+      const nodeCopy = { ...node };
+      const blockModelId = nodeCopy.blockModelId;
+      delete nodeCopy.originalIndex;
+      delete nodeCopy.type;
+      delete nodeCopy.children;
+      delete nodeCopy.blockModelId;
+
+      const fields = await client.fields.list(blockModelId);
+      const orderedFields = fields.sort((a, b) => a.position - b.position);
+      const fieldTypeDictionary = orderedFields.reduce((acc, field) => {
+        acc[field.api_key] = {
+          type: field.appearance.editor,
+          validators: field.validators
+            ? JSON.stringify(field.validators, null, 2)
+            : null,
+          hint: field.hint ? JSON.stringify(field.hint, null, 2) : null,
+          availableBlocks:
+            (field.validators.rich_text_blocks as Record<string, string[]>)
+              ?.item_types ?? [],
+        };
+        return acc;
+      }, {} as Record<string, { type: string; validators: string | null; hint: string | null; availableBlocks: string[] }>);
+
+      for (const field in nodeCopy) {
+        const generatedField = await generateFieldValue(
+          1,
+          itemTypes,
+          prompt,
+          fieldTypeDictionary[field].type,
+          pluginParams,
+          locale,
+          datoKey,
+          selectedResolution,
+          nodeCopy[field],
+          alert,
+          isImprove,
+          fieldInfo,
+          formValues,
+          null,
+          null,
+          fieldsetInfo,
+          modelName
+        );
+        nodeCopy[field] = generatedField;
+      }
+
+      Object.assign(node, {
+        ...nodeCopy,
+        type: 'block',
+        blockModelId: blockModelId,
+      });
+    }
+
+    // Reconstruct the object with the translated inline texts
+    const reconstructedObject = reconstructObject(
+      fieldValueWithoutBlocks,
+      returnedTextValues
+    );
+
+    // Insert the translated block nodes back into their original positions
+    let finalReconstructedObject = reconstructedObject;
+    for (const node of blockNodes as any[]) {
+      finalReconstructedObject = insertObjectAtIndex(
+        finalReconstructedObject,
+        node,
+        node.originalIndex
+      );
+    }
+
+    // Clean up temporary keys like 'originalIndex'
+    const cleanedReconstructedObject = finalReconstructedObject.map(
+      ({
+        originalIndex,
+        ...rest
+      }: {
+        originalIndex?: number;
+        [key: string]: any;
+      }) => rest
+    );
+
+    return cleanedReconstructedObject;
   }
 
   // Generate a base HTML using wysiwyg prompt

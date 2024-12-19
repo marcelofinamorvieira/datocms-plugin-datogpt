@@ -37,7 +37,7 @@ export const fieldsThatDontNeedTranslation = [
  * @param data The structured object from which to extract text.
  * @returns An array of found text strings.
  */
-function extractTextValues(data: unknown): string[] {
+export function extractTextValues(data: unknown): string[] {
   const textValues: string[] = [];
 
   function traverse(obj: any) {
@@ -61,7 +61,7 @@ function extractTextValues(data: unknown): string[] {
  * @param obj The object to clean.
  * @returns A new object without 'id' fields.
  */
-function removeIds(obj: unknown): any {
+export function removeIds(obj: unknown): any {
   if (Array.isArray(obj)) {
     return obj.map(removeIds);
   } else if (typeof obj === 'object' && obj !== null) {
@@ -84,7 +84,10 @@ function removeIds(obj: unknown): any {
  * @param textValues The array of translated text strings.
  * @returns The reconstructed object with translated text inserted back in.
  */
-function reconstructObject(originalObject: unknown, textValues: string[]): any {
+export function reconstructObject(
+  originalObject: unknown,
+  textValues: string[]
+): any {
   let index = 0;
   function traverse(obj: any): any {
     if (Array.isArray(obj)) {
@@ -134,7 +137,11 @@ function deleteItemIdKeys(obj: any): any {
  * @param index The position at which to insert the object.
  * @returns A new array with the object inserted.
  */
-function insertObjectAtIndex(array: unknown[], object: unknown, index: number) {
+export function insertObjectAtIndex(
+  array: unknown[],
+  object: unknown,
+  index: number
+) {
   return [...array.slice(0, index), object, ...array.slice(index)];
 }
 
