@@ -1,3 +1,23 @@
+//********************************************************************************************
+// DatoGPTPrompt.tsx
+//
+// This component adds a UI overlay to a DatoCMS field that integrates with an AI (OpenAI GPT model)
+// to generate, improve, or translate field values, and also handle media asset generation.
+//
+// Key Features:
+// - Displays a small OpenAI logo icon on the field.
+// - On clicking the icon, shows options to generate a new value, improve existing value, or translate.
+// - For media fields, can generate and upload new images.
+// - For rich text fields, can handle block generation.
+// - Shows a loading spinner (rotating icon) while generation/improvement is in progress.
+// - Newly added feature: displays a gray descriptive text next to the rotating logo indicating what
+//   action is being performed (e.g., "Generating Title..." or "Improving Description...").
+//
+// The component uses several states to manage UI (viewState: collapsed, options, prompting, etc.)
+// and to control animations. When a prompt is submitted, it calls a utility function (generateFieldValue)
+// to fetch AI-generated content and updates the field value.
+//********************************************************************************************
+
 import { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { Canvas } from 'datocms-react-ui';
@@ -27,6 +47,7 @@ type PropTypes = {
   ctx: RenderFieldExtensionCtx;
 };
 
+// Predefined resolutions array for image generation
 export const availableResolutionsArray: availableResolutions[] = [
   '1024x1024',
   '1024x1792',
@@ -36,44 +57,35 @@ export const availableResolutionsArray: availableResolutions[] = [
 ];
 
 /**
- * -------------------------------------------------------------------------------------------
- * DatoGPTPrompt Component
+ * getValueAtPath
+ * Utility function: Given a nested object and a string path (e.g. "object.child[0].key"),
+ * returns the value at that path. Used for fields inside blocks.
  *
- * This component adds a UI overlay to a DatoCMS field, allowing the user to:
- * - Prompt the AI to generate a new value for the field.
- * - Improve an existing value.
- * - Translate values across locales.
- * - Generate or improve media (images) if the field is a file or gallery.
- *
- * States:
- * - "collapsed": The default, minimal state showing only the AI icon button.
- * - "options": Shows action buttons relevant to the field type (e.g. generate new value, improve value, translate, etc.).
- * - "prompting" or "prompting-improve": Shows an input form allowing the user to provide a custom prompt to the AI.
- *
- * The exact options and prompting UI differ depending on:
- * - The field type (text, structured text, media).
- * - The localization setup (multiple locales or not).
- * - The plugin configuration (which fields support generation, improvement, translation).
- * -------------------------------------------------------------------------------------------
+ * @param obj The object to traverse
+ * @param path The dot-separated path string
+ * @returns The value at the specified path or undefined if not found
  */
+function getValueAtPath(obj: any, path: string): any {
+  return path.split('.').reduce((acc: any, key: string) => {
+    const index = Number(key);
+    return Number.isNaN(index) ? acc?.[key] : acc?.[index];
+  }, obj);
+}
 
 /**
- * -------------------------------------------------------------------------------------------
  * DatoGPTPromptOptions Component (Internal)
  *
- * This sub-component is responsible for rendering the "options" state of the DatoGPTPrompt UI.
- * Depending on the field type and plugin configuration, it displays different sets of action
- * buttons (e.g., "Prompt to generate new value", "Improve current value", "Translate", etc.).
+ * Renders the "options" state UI. Depending on the field type and plugin configuration:
+ * - For file/gallery fields: shows MediaOptions (generate image, alt text, etc.)
+ * - For rich_text fields: shows ModularContentOptions (generate/improve blocks)
+ * - For other text fields: shows DefaultOptions (generate/improve/translate text)
  *
- * Props:
- * - setViewState: function to update the main component state (e.g. switching from options to prompting)
- * - ctx: The field extension context from DatoCMS, providing field metadata and methods.
- * - pluginParams: The plugin configuration parameters including API keys and model info.
- * - controls: Animation controls for the icon rotation/loading animations.
- * - fieldValue: The current value of the field.
- *
- * This component returns nothing if no options apply to the current field, ensuring a clean UI.
- * -------------------------------------------------------------------------------------------
+ * @param viewState The current state of the UI (e.g. 'options')
+ * @param setViewState Function to update viewState
+ * @param ctx The DatoCMS field extension context
+ * @param pluginParams Plugin configuration parameters
+ * @param controls Animation controls for icon rotation
+ * @param fieldValue Current value of the field
  */
 function DatoGPTPromptOptions({
   viewState,
@@ -92,11 +104,10 @@ function DatoGPTPromptOptions({
 }) {
   const fieldType = ctx.field.attributes.appearance.editor;
 
-  // Render only if we are in "options" state
-  if (viewState !== 'options') return null;
+  if (viewState !== 'options') return null; // Only render in options state
 
-  // For file or gallery fields, show MediaOptions
   if (fieldType === 'file' || fieldType === 'gallery') {
+    // Media fields
     return (
       <MediaOptions
         setViewState={setViewState}
@@ -108,8 +119,8 @@ function DatoGPTPromptOptions({
     );
   }
 
-  // For structured text fields (rich_text), show ModularContentOptions
   if (fieldType === 'rich_text') {
+    // Rich text fields
     return (
       <ModularContentOptions
         setViewState={setViewState}
@@ -121,7 +132,7 @@ function DatoGPTPromptOptions({
     );
   }
 
-  // For other field types (text fields, etc.), show DefaultOptions
+  // Default (text) fields
   return (
     <DefaultOptions
       setViewState={setViewState}
@@ -134,27 +145,21 @@ function DatoGPTPromptOptions({
 }
 
 /**
- * -------------------------------------------------------------------------------------------
  * DatoGPTPromptPrompting Component (Internal)
  *
- * This sub-component handles the "prompting" states ("prompting" and "prompting-improve").
- * It displays a text input for the user to write a prompt and a button to generate/improve
- * the field value based on the AI output.
+ * Renders the UI for the "prompting" states (when user is entering a prompt to generate/improve).
+ * Which UI is displayed depends on field type:
+ * - MediaPrompting for file/gallery
+ * - ModularContentPrompting for rich_text
+ * - DefaultPrompting for text fields
  *
- * Depending on the field type, it chooses the appropriate prompting UI:
- * - For file/gallery: use MediaPrompting (which includes resolution selection).
- * - For rich_text: use ModularContentPrompting (which includes block type selection).
- * - For other text fields: use DefaultPrompting (simple text input and a prompt button).
- *
- * Props:
- * - viewState: either "prompting" or "prompting-improve"
- * - prompt: the current user-entered prompt text
- * - setPrompt: function to update the prompt state
- * - handleGeneratePrompt: function to actually perform the field value generation
- * - ctx: DatoCMS field extension context
- * - selectedResolution: the selected resolution for image generation (only used for media)
- * - setSelectedResolution: setter for resolution (only used for media)
- * -------------------------------------------------------------------------------------------
+ * @param viewState Current state ('prompting' or 'prompting-improve')
+ * @param prompt Current user-entered prompt
+ * @param setPrompt Setter for prompt
+ * @param handleGeneratePrompt Function triggered on prompt submission
+ * @param ctx Field context
+ * @param selectedResolution For media fields, the chosen resolution
+ * @param setSelectedResolution Setter for chosen resolution
  */
 function DatoGPTPromptPrompting({
   viewState,
@@ -182,16 +187,13 @@ function DatoGPTPromptPrompting({
   >;
 }) {
   const fieldType = ctx.field.attributes.appearance.editor;
-
-  // Determine if we are improving or just generating
   const isImprove = viewState === 'prompting-improve';
 
-  // Show the correct prompting UI based on field type
   if (
     (viewState === 'prompting' || viewState === 'prompting-improve') &&
     (fieldType === 'file' || fieldType === 'gallery')
   ) {
-    // Media fields: show MediaPrompting
+    // Media fields: MediaPrompting
     return (
       <MediaPrompting
         handleGeneratePrompt={handleGeneratePrompt}
@@ -207,7 +209,7 @@ function DatoGPTPromptPrompting({
     (viewState === 'prompting' || viewState === 'prompting-improve') &&
     fieldType === 'rich_text'
   ) {
-    // Rich text fields: show ModularContentPrompting
+    // Rich text fields: ModularContentPrompting
     return (
       <ModularContentPrompting
         handleGeneratePrompt={handleGeneratePrompt}
@@ -219,7 +221,7 @@ function DatoGPTPromptPrompting({
     );
   }
 
-  // Default text fields: show DefaultPrompting
+  // Default (text) fields: DefaultPrompting
   if (viewState === 'prompting' || viewState === 'prompting-improve') {
     return (
       <DefaultPrompting
@@ -234,62 +236,58 @@ function DatoGPTPromptPrompting({
   return null;
 }
 
-//Function to get the value at a given path, used for field values of fields inside blocks
-function getValueAtPath(obj: any, path: string): any {
-  return path.split('.').reduce((acc: any, key: string) => {
-    const index = Number(key);
-    return Number.isNaN(index) ? acc?.[key] : acc?.[index];
-  }, obj);
-}
-
 /**
- * -------------------------------------------------------------------------------------------
- * Main DatoGPTPrompt Component
+ * DatoGPTPrompt Component
  *
- * Responsibilities:
- * - Determine which UI to show based on the current state (collapsed, options, prompting).
- * - Handle the toggle between states when the AI icon is clicked.
- * - Manage animations and loading states while the AI processes requests.
- * - Invoke generateFieldValue utility when the user triggers prompt generation or improvement.
+ * Main exported component that:
+ * - Shows a small OpenAI icon on the field.
+ * - Clicking the icon toggles between collapsed and options state.
+ * - If user chooses to generate/improve a value, transitions to prompting state.
+ * - Once a prompt is submitted, starts a spinner and shows descriptive text while generating/improving.
+ * - After generation completes, updates field value and stops spinner.
  *
- * Steps:
- * 1. Check plugin and field configurations to ensure functionality and that at least one action applies.
- * 2. Render the main icon and handle click events to toggle states.
- * 3. Conditionally render either the "options" sub-component or the "prompting" sub-component based on state.
+ * State variables:
+ * - viewState: 'collapsed' | 'options' | 'prompting' | 'prompting-improve'
+ * - isSpinning: controls if the icon is rotated (spinner)
+ * - prompt: user-entered prompt text
+ * - selectedResolution: for media fields image resolution
+ * - isLoadingGeneration: new state to indicate if generation is in progress
+ * - lastAction: 'generate' or 'improve', to know what to show in descriptive text
  *
- * Variables:
- * - viewState: "collapsed", "options", "prompting", or "prompting-improve"
- * - prompt: user-entered text prompt for generation
- * - selectedResolution: chosen resolution for generating images in media fields
- * - isSpinning: controls icon spin animation
- * - controls: framer-motion controls for rotating the icon
- *
- * On prompt submit:
- * - Disables the field
- * - Starts a loading spinner
- * - Calls generateFieldValue and updates the field's value with the AI-generated result
- * - Re-enables the field and stops the spinner after completion
- * -------------------------------------------------------------------------------------------
+ * Lifecycle:
+ * - Initially collapsed (just icon).
+ * - Click icon -> show options.
+ * - Choose an action (generate/improve) -> show prompting UI.
+ * - Submit prompt -> start spinner, show descriptive text, call generateFieldValue.
+ * - On success/failure -> stop spinner, clear prompt, show final result.
  */
 export default function DatoGPTPrompt({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
   const fieldType = ctx.field.attributes.appearance.editor;
+
+  // Extract field value, handle fields inside blocks if needed
   let fieldValue =
     ctx.formValues[ctx.field.attributes.api_key] ||
-    (ctx.parentField?.attributes.localized && //for fields inside blocks
+    (ctx.parentField?.attributes.localized &&
       getValueAtPath(ctx.formValues, ctx.fieldPath));
 
-  // Animation controls for the icon
+  // Animation controls for the icon rotation
   const controls = useAnimation();
 
-  // Internal state management
+  // UI states
   const [viewState, setViewState] = useState('collapsed');
   const [isSpinning, setIsSpinning] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [selectedResolution, setSelectedResolution] =
     useState<availableResolutions>('1024x1024');
 
-  // If plugin is not properly configured, show a message
+  // New states for showing descriptive text during generation
+  const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
+  const [lastAction, setLastAction] = useState<'generate' | 'improve' | null>(
+    null
+  );
+
+  // If plugin is not configured properly, show a message
   if (
     !pluginParams ||
     !pluginParams.gptModel ||
@@ -299,7 +297,8 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   }
 
   /**
-   * Function: toggleOptions
+   * toggleOptions
+   *
    * Toggles between collapsed and options states when the icon is clicked.
    */
   const toggleOptions = () => {
@@ -311,8 +310,11 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   };
 
   /**
-   * Function: handleLogoClick
-   * Called when the AI icon is clicked. Rotates the icon and toggles the options.
+   * handleLogoClick
+   *
+   * Called when the OpenAI icon is clicked:
+   * - Rotates the icon by 180° if not spinning, else back to 0° if spinning.
+   * - Toggles between states to show/hide options.
    */
   const handleLogoClick = () => {
     if (!isSpinning) {
@@ -325,9 +327,15 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   };
 
   /**
-   * Function: handleGeneratePrompt
-   * Called when the user submits a prompt to generate/improve the field value.
-   * Disables the field and shows a loading spinner, then calls generateFieldValue.
+   * handleGeneratePrompt
+   *
+   * Called when user submits a prompt to generate or improve the field value.
+   * - Disables the field editing
+   * - Sets isLoadingGeneration to true, showing descriptive text
+   * - Starts the spinner animation
+   * - Calls generateFieldValue utility
+   *
+   * @param blockType Optional block type info for rich_text fields
    */
   const handleGeneratePrompt = (blockType?: {
     name: string;
@@ -338,6 +346,14 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   }) => {
     ctx.disableField(ctx.fieldPath, true);
     setViewState('collapsed');
+
+    // Determine if we are improving or generating
+    const isImprove = viewState === 'prompting-improve';
+    setLastAction(isImprove ? 'improve' : 'generate');
+
+    // Indicate loading/generation in progress
+    setIsLoadingGeneration(true);
+
     controls.start({
       rotate: [0, 360],
       transition: {
@@ -359,8 +375,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
               .hint ?? null,
         }
       : null;
-
-    const isImprove = viewState === 'prompting-improve';
 
     generateFieldValue(
       0,
@@ -395,170 +409,157 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
         ctx.setFieldValue(ctx.fieldPath, result);
         ctx.disableField(ctx.fieldPath, false);
         controls.stop();
+        // Done generating, remove loading state
+        setIsLoadingGeneration(false);
       })
       .catch((error) => {
         setPrompt('');
         ctx.alert(error);
         ctx.disableField(ctx.fieldPath, false);
         controls.stop();
+        // On error, also remove loading state
+        setIsLoadingGeneration(false);
       });
   };
 
-  /**
-   * Conditional rendering:
-   * - If there are no applicable actions for this field, return empty.
-   * - Otherwise, show the main UI with the icon and either options or prompting states.
-   */
+  // Additional logic to determine if actions are available:
+  // The following checks ensure that if no actions (generate/improve/translate)
+  // apply to this field, we return empty to avoid cluttering UI.
 
-  // Check conditions to ensure there's at least one action (generate/improve/translate) applicable
-  // If no action applies, return empty to avoid cluttering the UI.
-  // These checks replicate logic from the original code to ensure nothing breaks.
-  // For brevity, we trust existing logic and conditions as is.
+  let isEmptyStructuredText =
+    fieldType === 'structured_text' &&
+    Array.isArray(fieldValue) &&
+    fieldValue.length === 1 &&
+    typeof fieldValue[0] === 'object' &&
+    fieldValue[0] !== null &&
+    'type' in fieldValue[0] &&
+    fieldValue[0].type === 'paragraph' &&
+    fieldValue[0].children.length === 1 &&
+    fieldValue[0].children[0].text === '';
 
-  // ... [Keep existing conditions from original code, unchanged, ensuring functionality remains intact] ...
-  {
-    // The original code checks multiple conditions to hide the UI if no actions apply.
-    // We keep that logic intact. The checks are large and mostly about whether fields are empty
-    // or if pluginParams allow operations on this field type.
-    // Since no instructions were given to remove or alter these conditions, we trust them as is.
+  let hasFieldValueInThisLocale = !!fieldValue && !isEmptyStructuredText;
 
-    let isEmptyStructuredText =
+  const hasOtherLocales =
+    Array.isArray(ctx.formValues.internalLocales) &&
+    ctx.formValues.internalLocales.length > 1;
+
+  const isLocalized = !!(
+    !fieldsThatDontNeedTranslation.includes(fieldType) &&
+    hasOtherLocales &&
+    !ctx.parentField &&
+    fieldValue &&
+    typeof fieldValue === 'object' &&
+    !Array.isArray(fieldValue) &&
+    (fieldValue as Record<string, unknown>)[
+      (ctx.formValues.internalLocales as string[])[0]
+    ]
+  );
+
+  if (
+    fieldValue &&
+    typeof fieldValue === 'object' &&
+    !Array.isArray(fieldValue) &&
+    ctx.locale in (fieldValue as Record<string, unknown>)
+  ) {
+    const fieldValueInThisLocale = (fieldValue as Record<string, unknown>)[
+      ctx.locale
+    ];
+
+    isEmptyStructuredText =
       fieldType === 'structured_text' &&
-      Array.isArray(fieldValue) &&
-      fieldValue.length === 1 &&
-      typeof fieldValue[0] === 'object' &&
-      fieldValue[0] !== null &&
-      'type' in fieldValue[0] &&
-      fieldValue[0].type === 'paragraph' &&
-      fieldValue[0].children.length === 1 &&
-      fieldValue[0].children[0].text === '';
+      Array.isArray(fieldValueInThisLocale) &&
+      fieldValueInThisLocale.length === 1 &&
+      typeof fieldValueInThisLocale[0] === 'object' &&
+      fieldValueInThisLocale[0] !== null &&
+      'type' in fieldValueInThisLocale[0] &&
+      fieldValueInThisLocale[0].type === 'paragraph' &&
+      fieldValueInThisLocale[0].children.length === 1 &&
+      fieldValueInThisLocale[0].children[0].text === '';
 
-    let hasFieldValueInThisLocale = !!fieldValue && !isEmptyStructuredText;
-
-    const hasOtherLocales =
-      Array.isArray(ctx.formValues.internalLocales) &&
-      ctx.formValues.internalLocales.length > 1;
-
-    const isLocalized = !!(
-      !fieldsThatDontNeedTranslation.includes(fieldType) &&
-      hasOtherLocales &&
-      !ctx.parentField &&
-      fieldValue &&
-      typeof fieldValue === 'object' &&
-      !Array.isArray(fieldValue) &&
-      (fieldValue as Record<string, unknown>)[
-        (ctx.formValues.internalLocales as string[])[0]
-      ]
-    );
-
-    if (
-      fieldValue &&
-      typeof fieldValue === 'object' &&
-      !Array.isArray(fieldValue) &&
-      ctx.locale in (fieldValue as Record<string, unknown>)
-    ) {
-      const fieldValueInThisLocale = (fieldValue as Record<string, unknown>)[
-        ctx.locale
-      ];
-
-      isEmptyStructuredText =
-        fieldType === 'structured_text' &&
-        Array.isArray(fieldValueInThisLocale) &&
-        fieldValueInThisLocale.length === 1 &&
-        typeof fieldValueInThisLocale[0] === 'object' &&
-        fieldValueInThisLocale[0] !== null &&
-        'type' in fieldValueInThisLocale[0] &&
-        fieldValueInThisLocale[0].type === 'paragraph' &&
-        fieldValueInThisLocale[0].children.length === 1 &&
-        fieldValueInThisLocale[0].children[0].text === '';
-
-      hasFieldValueInThisLocale =
-        !!fieldValueInThisLocale && !isEmptyStructuredText;
-    }
-
-    // If conditions to show/hide the UI fail, return nothing
-    // (These conditions remain as in the original code, ensuring no functional changes)
-    if (
-      ((fieldType === 'file' || fieldType === 'gallery') &&
-        !pluginParams.advancedSettings.mediaFieldsPermissions &&
-        !pluginParams.advancedSettings.generateAlts) ||
-      (!(
-        (!Array.isArray(fieldValue) &&
-          typeof fieldValue === 'object' &&
-          (fieldValue as Upload)?.upload_id) ||
-        (!Array.isArray(fieldValue) &&
-          typeof fieldValue === 'object' &&
-          ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload)
-            ?.upload_id) ||
-        (!Array.isArray(fieldValue) &&
-          typeof fieldValue === 'object' &&
-          ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload[])
-            ?.length > 0) ||
-        (Array.isArray(fieldValue) && fieldValue.length > 0)
-      ) &&
-        !pluginParams.advancedSettings.mediaFieldsPermissions)
-    ) {
-      return <></>;
-    }
-
-    if (
-      !(
-        fieldType === 'file' ||
-        fieldType === 'gallery' ||
-        fieldType === 'rich_text'
-      ) &&
-      !pluginParams.advancedSettings.generateValueFields.includes(
-        fieldType as keyof typeof textFieldTypes
-      ) &&
-      !pluginParams.advancedSettings.improveValueFields.includes(
-        fieldType as keyof typeof textFieldTypes
-      ) &&
-      !pluginParams.advancedSettings.translationFields.includes(
-        fieldType as keyof typeof translateFieldTypes
-      )
-    ) {
-      return <></>;
-    }
-
-    if (
-      !(
-        fieldType === 'file' ||
-        fieldType === 'gallery' ||
-        fieldType === 'rich_text'
-      ) &&
-      !pluginParams.advancedSettings.generateValueFields.includes(
-        fieldType as keyof typeof textFieldTypes
-      ) &&
-      !hasFieldValueInThisLocale
-    ) {
-      return <></>;
-    }
-
-    if (
-      !(
-        fieldType === 'file' ||
-        fieldType === 'gallery' ||
-        fieldType === 'rich_text'
-      ) &&
-      !pluginParams.advancedSettings.generateValueFields.includes(
-        fieldType as keyof typeof textFieldTypes
-      ) &&
-      !pluginParams.advancedSettings.improveValueFields.includes(
-        fieldType as keyof typeof textFieldTypes
-      ) &&
-      !isLocalized
-    ) {
-      return <></>;
-    }
+    hasFieldValueInThisLocale =
+      !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
 
-  // Render the main UI with icon and conditional panels
+  if (
+    ((fieldType === 'file' || fieldType === 'gallery') &&
+      !pluginParams.advancedSettings.mediaFieldsPermissions &&
+      !pluginParams.advancedSettings.generateAlts) ||
+    (!(
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        (fieldValue as Upload)?.upload_id) ||
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload)
+          ?.upload_id) ||
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload[])
+          ?.length > 0) ||
+      (Array.isArray(fieldValue) && fieldValue.length > 0)
+    ) &&
+      !pluginParams.advancedSettings.mediaFieldsPermissions)
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.improveValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.translationFields.includes(
+      fieldType as keyof typeof translateFieldTypes
+    )
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !hasFieldValueInThisLocale
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.improveValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !isLocalized
+  ) {
+    return <></>;
+  }
+
+  // Render the UI
   return (
     <Canvas ctx={ctx}>
       <div className={classNames(s.optionContainer)}>
-        {/* AnimatePresence handles the fade-in/out of components */}
+        {/* AnimatePresence for smooth transitions */}
         <AnimatePresence>
-          {/* The Options panel */}
+          {/* Options Panel */}
           <DatoGPTPromptOptions
             viewState={viewState}
             setViewState={setViewState}
@@ -570,7 +571,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
         </AnimatePresence>
 
         <AnimatePresence>
-          {/* The Prompting panel (if viewState is prompting or prompting-improve) */}
+          {/* Prompting Panel (if in prompting/improve state) */}
           <DatoGPTPromptPrompting
             viewState={viewState}
             prompt={prompt}
@@ -582,7 +583,16 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
           />
         </AnimatePresence>
 
-        {/* The main icon button that toggles states */}
+        {/* When loading (generating/improving), show descriptive text next to spinner */}
+        {isLoadingGeneration && (
+          <span style={{ color: 'gray', marginRight: '8px' }}>
+            {lastAction === 'improve'
+              ? `Improving ${ctx.field.attributes.label}...`
+              : `Generating ${ctx.field.attributes.label}...`}
+          </span>
+        )}
+
+        {/* The main icon that toggles states */}
         <span className={classNames(s.gptOptions)}>
           <motion.div
             animate={controls}
