@@ -6,23 +6,28 @@
 //
 // Key Features:
 // - Displays a small OpenAI logo icon on the field.
-// - On clicking the icon, shows options to generate/improve/translate values or generate alt text for media.
+// - On clicking the icon, shows options to generate/improve/translate.
 // - For text fields: can generate or improve value.
 // - For localized fields: can translate field values.
 // - For media fields: can generate new images or alt text.
 // - For rich text fields: can generate/improve modular content.
-// - Shows a loading spinner and descriptive messages while an operation (generate/improve/translate) is in progress.
-// - Now includes a detailed message (generationDetails) for structured_text fields, showing the steps being taken.
+// - Shows a loading spinner (rotating icon) while an operation (generate/improve/translate) is in progress.
+// - Shows descriptive gray text next to the spinner, indicating what action is happening.
+//
+// Newly added feature:
+// - When performing translation actions (like "Translate to all locales" or "Translate from main locale"),
+//   display a gray text indicating what field is being translated to which locale.
 //
 // State variables and flow:
-// - viewState: controls the UI state (collapsed/options/prompting).
-// - isLoadingGeneration and lastAction: track generation/improvement states and show descriptive text.
-// - isLoadingTranslation and translationMessage: track translation states and show descriptive text.
-// - generationDetails: a new state to show more detailed status messages, especially for structured_text steps.
+// - viewState: controls UI state (collapsed/options/prompting).
+// - isLoadingGeneration, lastAction: track generation/improvement states and show descriptive text.
+// - isLoadingTranslation, translationMessage: track translation states and show descriptive text.
+// - On translation start, isLoadingTranslation = true and translationMessage is set.
+// - On translation end, isLoadingTranslation = false and translationMessage cleared.
 //
 // Interaction with children components (DefaultOptions, ModularContentOptions):
-// - Passes down translation state setters to these children so that translation actions can set messages.
-// - When generating/improving structured_text, onStepUpdate callback updates generationDetails with step-by-step info.
+// - Parent (DatoGPTPrompt) passes down setters to these children so they can set isLoadingTranslation and translationMessage.
+// - When translation buttons are clicked in children, they set translation states, call TranslateField, and then revert states.
 //
 //********************************************************************************************
 
@@ -55,6 +60,7 @@ type PropTypes = {
   ctx: RenderFieldExtensionCtx;
 };
 
+// Predefined resolutions array for image generation
 export const availableResolutionsArray: availableResolutions[] = [
   '1024x1024',
   '1024x1792',
@@ -66,7 +72,7 @@ export const availableResolutionsArray: availableResolutions[] = [
 /**
  * getValueAtPath
  * Utility function: Given a nested object and a string path (e.g. "object.child[0].key"),
- * returns the value at that path.
+ * returns the value at that path. Used for fields inside blocks.
  *
  * @param obj The object to traverse
  * @param path The dot-separated path string
@@ -85,7 +91,7 @@ function getValueAtPath(obj: any, path: string): any {
  * Depending on the current field type and viewState:
  * - For file/gallery fields: MediaOptions
  * - For rich_text fields: ModularContentOptions
- * - Otherwise: DefaultOptions
+ * - For other fields: DefaultOptions
  *
  * Passes down translation state setters to children.
  */
@@ -117,6 +123,7 @@ function DatoGPTPromptOptions({
   if (viewState !== 'options') return null;
 
   if (fieldType === 'file' || fieldType === 'gallery') {
+    // Media fields: show MediaOptions
     return (
       <MediaOptions
         setViewState={setViewState}
@@ -129,6 +136,7 @@ function DatoGPTPromptOptions({
   }
 
   if (fieldType === 'rich_text') {
+    // Rich text fields: show ModularContentOptions
     return (
       <ModularContentOptions
         setViewState={setViewState}
@@ -144,6 +152,7 @@ function DatoGPTPromptOptions({
     );
   }
 
+  // Default text fields: DefaultOptions
   return (
     <DefaultOptions
       setViewState={setViewState}
@@ -245,8 +254,8 @@ function DatoGPTPromptPrompting({
  *
  * Main exported component:
  * - Renders an icon and provides a UI for generating/improving/translating field values.
- * - Has states for loading generation or translation and displays descriptive text.
- * - For structured_text fields, now shows detailed status messages during generation steps.
+ * - Has states for loading generation or translation.
+ * - Displays descriptive gray text during operations.
  */
 export default function DatoGPTPrompt({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
@@ -275,9 +284,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   const [isLoadingTranslation, setIsLoadingTranslation] = useState(false);
   const [translationMessage, setTranslationMessage] = useState('');
 
-  // New state for detailed generation messages, especially for structured_text steps
-  const [generationDetails, setGenerationDetails] = useState('');
-
   if (
     !pluginParams ||
     !pluginParams.gptModel ||
@@ -304,6 +310,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     toggleOptions();
   };
 
+  // Determine if field is empty or localized to handle conditions
   let isEmptyStructuredText =
     fieldType === 'structured_text' &&
     Array.isArray(fieldValue) &&
@@ -358,6 +365,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
       !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
 
+  // If none of the actions apply, return empty
   if (
     ((fieldType === 'file' || fieldType === 'gallery') &&
       !pluginParams.advancedSettings.mediaFieldsPermissions &&
@@ -435,8 +443,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
    * handleGeneratePrompt
    *
    * Called when user submits prompt to generate/improve field value.
-   * Disables field, sets loading state, shows spinner and descriptive text.
-   * Also passes onStepUpdate callback to capture step-by-step details for structured_text.
+   * Disables field, sets loading state, shows spinner and descriptive text for generation.
    */
   const handleGeneratePrompt = (blockType?: {
     name: string;
@@ -451,7 +458,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     const isImprove = viewState === 'prompting-improve';
     setLastAction(isImprove ? 'improve' : 'generate');
     setIsLoadingGeneration(true);
-    setGenerationDetails(''); // Clear previous details
 
     controls.start({
       rotate: [0, 360],
@@ -501,11 +507,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
       blockType ?? null,
       null,
       fieldsetInfo,
-      ctx.itemType.attributes.name,
-      (msg: string) => {
-        // onStepUpdate callback: update generation details state
-        setGenerationDetails(msg);
-      }
+      ctx.itemType.attributes.name
     )
       .then((result) => {
         setPrompt('');
@@ -559,7 +561,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
             {lastAction === 'improve'
               ? `Improving ${ctx.field.attributes.label}...`
               : `Generating ${ctx.field.attributes.label}...`}
-            {generationDetails ? ` (${generationDetails})` : ''}
           </span>
         )}
 
