@@ -4,7 +4,16 @@
 // This component renders various action buttons for a given CMS field, such as generating new values,
 // improving existing values, or translating content between locales.
 //
-//********************************************************************************************
+// Newly added feature:
+// - When user clicks on "Translate to all locales" or "Translate from main locale",
+//   we now display a gray text indicator next to the spinner indicating what field is being translated and to which locale.
+//
+// Logic:
+// - We receive isLoadingTranslation and translationMessage setters from parent (DatoGPTPrompt).
+// - Before calling TranslateField, set isLoadingTranslation=true and setTranslationMessage to show which locale is being processed.
+// - After the translation for all target locales completes, set isLoadingTranslation=false and clear message.
+//
+//--------------------------------------------------------------------------------------------
 
 import classNames from 'classnames';
 import { Button } from 'datocms-react-ui';
@@ -20,41 +29,24 @@ import {
   translateFieldTypes,
 } from '../../../entrypoints/Config/AdvancedSettings';
 
-//--------------------------------------------------------------------------------------------
-// PropTypes: Defines the shape of the props this component expects.
-//
-// setViewState: A React state setter function to update the current UI view state.
-// ctx: DatoCMS field extension context object, providing metadata and methods for field actions.
-// controls: AnimationControls for managing visual transitions.
-// fieldValue: The current value of the field this component is attached to.
-// pluginParams: Configuration parameters for the plugin.
-//
-//--------------------------------------------------------------------------------------------
 type PropTypes = {
   setViewState: React.Dispatch<React.SetStateAction<string>>;
   ctx: RenderFieldExtensionCtx;
   controls: AnimationControls;
   fieldValue: unknown;
   pluginParams: ctxParamsType;
+  isLoadingTranslation: boolean;
+  setIsLoadingTranslation: React.Dispatch<React.SetStateAction<boolean>>;
+  translationMessage: string;
+  setTranslationMessage: React.Dispatch<React.SetStateAction<string>>;
 };
 
-//--------------------------------------------------------------------------------------------
-// OptionsButton Component:
-// A small helper component to render a button with consistent styling and behavior.
-//
-// Parameters:
-//   onClick:   Function called when the button is pressed.
-//   label:     Text displayed on the button.
-//   buttonType: Type of the button style ("muted", "primary", etc.).
-//
-// This promotes DRY (Don't Repeat Yourself) principles and makes buttons easier to maintain.
-//--------------------------------------------------------------------------------------------
 function OptionsButton({
   onClick,
   label,
   buttonType = 'muted',
 }: {
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   label: string;
   buttonType?: 'muted' | 'primary';
 }) {
@@ -65,40 +57,26 @@ function OptionsButton({
   );
 }
 
-//--------------------------------------------------------------------------------------------
-// DefaultOptions Component
-//
-// This component displays a set of buttons that allow the user to perform various actions on
-// the current field value, including prompting to generate a new value, improving the current
-// value, and translating values to other locales.
-//
-// Logic:
-// - Checks if the field has multiple locales.
-// - Determines if the field is localized and what actions are allowed (e.g., translation).
-// - Shows the appropriate buttons based on plugin settings and the current field type/value.
-//
-//--------------------------------------------------------------------------------------------
 const DefaultOptions = ({
   setViewState,
   ctx,
   fieldValue,
   controls,
   pluginParams,
+  isLoadingTranslation,
+  setIsLoadingTranslation,
+  translationMessage,
+  setTranslationMessage,
 }: PropTypes) => {
-  // Check if other locales exist
   const hasOtherLocales =
     Array.isArray(ctx.formValues.internalLocales) &&
     ctx.formValues.internalLocales.length > 1;
-
-  // Check if current locale is the primary locale
   const isPrimaryLocale = !!(
     hasOtherLocales &&
     (ctx.formValues.internalLocales as string[])[0] === ctx.locale
   );
 
   const fieldType = ctx.field.attributes.appearance.editor;
-
-  // Determine if field is localized and if main locale has a value
   const isLocalized = !!(
     !fieldsThatDontNeedTranslation.includes(fieldType) &&
     hasOtherLocales &&
@@ -111,7 +89,6 @@ const DefaultOptions = ({
     ]
   );
 
-  // Check if the current locale has a non-empty value
   let isEmptyStructuredText =
     fieldType === 'structured_text' &&
     Array.isArray(fieldValue) &&
@@ -146,13 +123,8 @@ const DefaultOptions = ({
       fieldValueInThisLocale[0].children.length === 1 &&
       fieldValueInThisLocale[0].children[0].text === '';
 
-    hasFieldValueInThisLocale =
-      !!fieldValueInThisLocale && !isEmptyStructuredText;
+    hasFieldValueInThisLocale = !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
-
-  //------------------------------------------------------------------------------------------
-  // Render Buttons
-  //------------------------------------------------------------------------------------------
 
   return (
     <motion.div
@@ -162,7 +134,6 @@ const DefaultOptions = ({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25, ease: 'easeInOut' }}
     >
-      {/* "Generate value" button: visible if field type is in generateValueFields */}
       {pluginParams.advancedSettings.generateValueFields.includes(
         fieldType as keyof typeof textFieldTypes
       ) && (
@@ -179,7 +150,6 @@ const DefaultOptions = ({
         </div>
       )}
 
-      {/* "Improve current value" button: visible if field has a value and is listed in improveValueFields */}
       {hasFieldValueInThisLocale &&
         pluginParams.advancedSettings.improveValueFields.includes(
           fieldType as keyof typeof textFieldTypes
@@ -197,7 +167,6 @@ const DefaultOptions = ({
           </div>
         )}
 
-      {/* "Translate to all locales" button: visible if field is localized and we're on the primary locale */}
       {isLocalized &&
         hasOtherLocales &&
         isPrimaryLocale &&
@@ -210,24 +179,35 @@ const DefaultOptions = ({
                 const locales = (
                   ctx.formValues.internalLocales as string[]
                 ).slice(1);
+                setIsLoadingTranslation(true);
+                const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+                // Set a generic message first
+                setTranslationMessage(
+                  `Translating ${ctx.field.attributes.label} from ${mainLocale} to all locales...`
+                );
                 for (let i = 0; i < locales.length; i++) {
+                  const locale = locales[i];
+                  setTranslationMessage(
+                    `Translating ${ctx.field.attributes.label} from ${mainLocale} to ${locale}...`
+                  );
                   await TranslateField(
                     setViewState,
                     (fieldValue as Record<string, unknown>)[ctx.locale],
                     ctx,
                     controls,
                     pluginParams,
-                    locales[i],
+                    locale,
                     fieldType
                   );
                 }
+                setIsLoadingTranslation(false);
+                setTranslationMessage('');
               }}
               label="Translate to all locales"
             />
           </div>
         )}
 
-      {/* "Translate from main locale" button: visible if field is localized and we're NOT on the primary locale */}
       {isLocalized &&
         hasOtherLocales &&
         !isPrimaryLocale &&
@@ -236,18 +216,24 @@ const DefaultOptions = ({
         ) && (
           <div key="generate-button" className={classNames(s.buttonsContainer)}>
             <OptionsButton
-              onClick={() => {
-                TranslateField(
+              onClick={async () => {
+                setIsLoadingTranslation(true);
+                const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+                const targetLocale = ctx.locale;
+                setTranslationMessage(
+                  `Translating ${ctx.field.attributes.label} from ${mainLocale} to ${targetLocale}...`
+                );
+                await TranslateField(
                   setViewState,
-                  (fieldValue as Record<string, unknown>)[
-                    (ctx.formValues.internalLocales as string[])[0]
-                  ],
+                  (fieldValue as Record<string, unknown>)[mainLocale],
                   ctx,
                   controls,
                   pluginParams,
                   ctx.locale,
                   fieldType
                 );
+                setIsLoadingTranslation(false);
+                setTranslationMessage('');
               }}
               label="Translate from main locale"
             />

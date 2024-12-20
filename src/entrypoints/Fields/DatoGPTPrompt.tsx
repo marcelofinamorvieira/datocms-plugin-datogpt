@@ -6,16 +6,29 @@
 //
 // Key Features:
 // - Displays a small OpenAI logo icon on the field.
-// - On clicking the icon, shows options to generate a new value, improve existing value, or translate.
-// - For media fields, can generate and upload new images.
-// - For rich text fields, can handle block generation.
-// - Shows a loading spinner (rotating icon) while generation/improvement is in progress.
-// - Newly added feature: displays a gray descriptive text next to the rotating logo indicating what
-//   action is being performed (e.g., "Generating Title..." or "Improving Description...").
+// - On clicking the icon, shows options to generate/improve/translate.
+// - For text fields: can generate or improve value.
+// - For localized fields: can translate field values.
+// - For media fields: can generate new images or alt text.
+// - For rich text fields: can generate/improve modular content.
+// - Shows a loading spinner (rotating icon) while an operation (generate/improve/translate) is in progress.
+// - Shows descriptive gray text next to the spinner, indicating what action is happening.
 //
-// The component uses several states to manage UI (viewState: collapsed, options, prompting, etc.)
-// and to control animations. When a prompt is submitted, it calls a utility function (generateFieldValue)
-// to fetch AI-generated content and updates the field value.
+// Newly added feature:
+// - When performing translation actions (like "Translate to all locales" or "Translate from main locale"),
+//   display a gray text indicating what field is being translated to which locale.
+//
+// State variables and flow:
+// - viewState: controls UI state (collapsed/options/prompting).
+// - isLoadingGeneration, lastAction: track generation/improvement states and show descriptive text.
+// - isLoadingTranslation, translationMessage: track translation states and show descriptive text.
+// - On translation start, isLoadingTranslation = true and translationMessage is set.
+// - On translation end, isLoadingTranslation = false and translationMessage cleared.
+//
+// Interaction with children components (DefaultOptions, ModularContentOptions):
+// - Parent (DatoGPTPrompt) passes down setters to these children so they can set isLoadingTranslation and translationMessage.
+// - When translation buttons are clicked in children, they set translation states, call TranslateField, and then revert states.
+//
 //********************************************************************************************
 
 import { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
@@ -75,17 +88,12 @@ function getValueAtPath(obj: any, path: string): any {
 /**
  * DatoGPTPromptOptions Component (Internal)
  *
- * Renders the "options" state UI. Depending on the field type and plugin configuration:
- * - For file/gallery fields: shows MediaOptions (generate image, alt text, etc.)
- * - For rich_text fields: shows ModularContentOptions (generate/improve blocks)
- * - For other text fields: shows DefaultOptions (generate/improve/translate text)
+ * Depending on the current field type and viewState:
+ * - For file/gallery fields: MediaOptions
+ * - For rich_text fields: ModularContentOptions
+ * - For other fields: DefaultOptions
  *
- * @param viewState The current state of the UI (e.g. 'options')
- * @param setViewState Function to update viewState
- * @param ctx The DatoCMS field extension context
- * @param pluginParams Plugin configuration parameters
- * @param controls Animation controls for icon rotation
- * @param fieldValue Current value of the field
+ * Passes down translation state setters to children.
  */
 function DatoGPTPromptOptions({
   viewState,
@@ -94,6 +102,10 @@ function DatoGPTPromptOptions({
   pluginParams,
   controls,
   fieldValue,
+  isLoadingTranslation,
+  setIsLoadingTranslation,
+  translationMessage,
+  setTranslationMessage,
 }: {
   viewState: string;
   setViewState: React.Dispatch<React.SetStateAction<string>>;
@@ -101,13 +113,17 @@ function DatoGPTPromptOptions({
   pluginParams: ctxParamsType;
   controls: ReturnType<typeof useAnimation>;
   fieldValue: unknown;
+  isLoadingTranslation: boolean;
+  setIsLoadingTranslation: React.Dispatch<React.SetStateAction<boolean>>;
+  translationMessage: string;
+  setTranslationMessage: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const fieldType = ctx.field.attributes.appearance.editor;
 
-  if (viewState !== 'options') return null; // Only render in options state
+  if (viewState !== 'options') return null;
 
   if (fieldType === 'file' || fieldType === 'gallery') {
-    // Media fields
+    // Media fields: show MediaOptions
     return (
       <MediaOptions
         setViewState={setViewState}
@@ -120,7 +136,7 @@ function DatoGPTPromptOptions({
   }
 
   if (fieldType === 'rich_text') {
-    // Rich text fields
+    // Rich text fields: show ModularContentOptions
     return (
       <ModularContentOptions
         setViewState={setViewState}
@@ -128,11 +144,15 @@ function DatoGPTPromptOptions({
         fieldValue={fieldValue}
         pluginParams={pluginParams}
         controls={controls}
+        isLoadingTranslation={isLoadingTranslation}
+        setIsLoadingTranslation={setIsLoadingTranslation}
+        translationMessage={translationMessage}
+        setTranslationMessage={setTranslationMessage}
       />
     );
   }
 
-  // Default (text) fields
+  // Default text fields: DefaultOptions
   return (
     <DefaultOptions
       setViewState={setViewState}
@@ -140,6 +160,10 @@ function DatoGPTPromptOptions({
       fieldValue={fieldValue}
       pluginParams={pluginParams}
       controls={controls}
+      isLoadingTranslation={isLoadingTranslation}
+      setIsLoadingTranslation={setIsLoadingTranslation}
+      translationMessage={translationMessage}
+      setTranslationMessage={setTranslationMessage}
     />
   );
 }
@@ -147,19 +171,11 @@ function DatoGPTPromptOptions({
 /**
  * DatoGPTPromptPrompting Component (Internal)
  *
- * Renders the UI for the "prompting" states (when user is entering a prompt to generate/improve).
- * Which UI is displayed depends on field type:
- * - MediaPrompting for file/gallery
- * - ModularContentPrompting for rich_text
- * - DefaultPrompting for text fields
- *
- * @param viewState Current state ('prompting' or 'prompting-improve')
- * @param prompt Current user-entered prompt
- * @param setPrompt Setter for prompt
- * @param handleGeneratePrompt Function triggered on prompt submission
- * @param ctx Field context
- * @param selectedResolution For media fields, the chosen resolution
- * @param setSelectedResolution Setter for chosen resolution
+ * Renders the UI for prompting states (prompting or prompting-improve).
+ * Chooses sub-component based on field type:
+ * - file/gallery: MediaPrompting
+ * - rich_text: ModularContentPrompting
+ * - others: DefaultPrompting
  */
 function DatoGPTPromptPrompting({
   viewState,
@@ -193,7 +209,6 @@ function DatoGPTPromptPrompting({
     (viewState === 'prompting' || viewState === 'prompting-improve') &&
     (fieldType === 'file' || fieldType === 'gallery')
   ) {
-    // Media fields: MediaPrompting
     return (
       <MediaPrompting
         handleGeneratePrompt={handleGeneratePrompt}
@@ -209,7 +224,6 @@ function DatoGPTPromptPrompting({
     (viewState === 'prompting' || viewState === 'prompting-improve') &&
     fieldType === 'rich_text'
   ) {
-    // Rich text fields: ModularContentPrompting
     return (
       <ModularContentPrompting
         handleGeneratePrompt={handleGeneratePrompt}
@@ -221,7 +235,6 @@ function DatoGPTPromptPrompting({
     );
   }
 
-  // Default (text) fields: DefaultPrompting
   if (viewState === 'prompting' || viewState === 'prompting-improve') {
     return (
       <DefaultPrompting
@@ -239,55 +252,38 @@ function DatoGPTPromptPrompting({
 /**
  * DatoGPTPrompt Component
  *
- * Main exported component that:
- * - Shows a small OpenAI icon on the field.
- * - Clicking the icon toggles between collapsed and options state.
- * - If user chooses to generate/improve a value, transitions to prompting state.
- * - Once a prompt is submitted, starts a spinner and shows descriptive text while generating/improving.
- * - After generation completes, updates field value and stops spinner.
- *
- * State variables:
- * - viewState: 'collapsed' | 'options' | 'prompting' | 'prompting-improve'
- * - isSpinning: controls if the icon is rotated (spinner)
- * - prompt: user-entered prompt text
- * - selectedResolution: for media fields image resolution
- * - isLoadingGeneration: new state to indicate if generation is in progress
- * - lastAction: 'generate' or 'improve', to know what to show in descriptive text
- *
- * Lifecycle:
- * - Initially collapsed (just icon).
- * - Click icon -> show options.
- * - Choose an action (generate/improve) -> show prompting UI.
- * - Submit prompt -> start spinner, show descriptive text, call generateFieldValue.
- * - On success/failure -> stop spinner, clear prompt, show final result.
+ * Main exported component:
+ * - Renders an icon and provides a UI for generating/improving/translating field values.
+ * - Has states for loading generation or translation.
+ * - Displays descriptive gray text during operations.
  */
 export default function DatoGPTPrompt({ ctx }: PropTypes) {
   const pluginParams = ctx.plugin.attributes.parameters as ctxParamsType;
   const fieldType = ctx.field.attributes.appearance.editor;
 
-  // Extract field value, handle fields inside blocks if needed
   let fieldValue =
     ctx.formValues[ctx.field.attributes.api_key] ||
     (ctx.parentField?.attributes.localized &&
       getValueAtPath(ctx.formValues, ctx.fieldPath));
 
-  // Animation controls for the icon rotation
   const controls = useAnimation();
 
-  // UI states
   const [viewState, setViewState] = useState('collapsed');
   const [isSpinning, setIsSpinning] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [selectedResolution, setSelectedResolution] =
     useState<availableResolutions>('1024x1024');
 
-  // New states for showing descriptive text during generation
+  // States for generation/improvement loading
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
   const [lastAction, setLastAction] = useState<'generate' | 'improve' | null>(
     null
   );
 
-  // If plugin is not configured properly, show a message
+  // States for translation loading
+  const [isLoadingTranslation, setIsLoadingTranslation] = useState(false);
+  const [translationMessage, setTranslationMessage] = useState('');
+
   if (
     !pluginParams ||
     !pluginParams.gptModel ||
@@ -296,11 +292,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     return <>Please insert a valid API Key and select a GPT Model</>;
   }
 
-  /**
-   * toggleOptions
-   *
-   * Toggles between collapsed and options states when the icon is clicked.
-   */
   const toggleOptions = () => {
     if (viewState === 'collapsed') {
       setViewState('options');
@@ -309,13 +300,6 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     }
   };
 
-  /**
-   * handleLogoClick
-   *
-   * Called when the OpenAI icon is clicked:
-   * - Rotates the icon by 180° if not spinning, else back to 0° if spinning.
-   * - Toggles between states to show/hide options.
-   */
   const handleLogoClick = () => {
     if (!isSpinning) {
       controls.start({ rotate: 180 });
@@ -326,106 +310,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     toggleOptions();
   };
 
-  /**
-   * handleGeneratePrompt
-   *
-   * Called when user submits a prompt to generate or improve the field value.
-   * - Disables the field editing
-   * - Sets isLoadingGeneration to true, showing descriptive text
-   * - Starts the spinner animation
-   * - Calls generateFieldValue utility
-   *
-   * @param blockType Optional block type info for rich_text fields
-   */
-  const handleGeneratePrompt = (blockType?: {
-    name: string;
-    apiKey: string;
-    blockModelId: string;
-    blockLevel: number;
-    availableBlocks: string[];
-  }) => {
-    ctx.disableField(ctx.fieldPath, true);
-    setViewState('collapsed');
-
-    // Determine if we are improving or generating
-    const isImprove = viewState === 'prompting-improve';
-    setLastAction(isImprove ? 'improve' : 'generate');
-
-    // Indicate loading/generation in progress
-    setIsLoadingGeneration(true);
-
-    controls.start({
-      rotate: [0, 360],
-      transition: {
-        rotate: {
-          duration: 1,
-          ease: 'linear',
-          repeat: Infinity,
-        },
-      },
-    });
-
-    const fieldsetInfo = ctx.field.relationships.fieldset.data?.id
-      ? {
-          name:
-            ctx.fieldsets[ctx.field.relationships.fieldset.data?.id]?.attributes
-              .title ?? null,
-          hint:
-            ctx.fieldsets[ctx.field.relationships.fieldset.data?.id]?.attributes
-              .hint ?? null,
-        }
-      : null;
-
-    generateFieldValue(
-      0,
-      ctx.itemTypes,
-      prompt,
-      fieldType,
-      pluginParams,
-      ctx.locale,
-      ctx.currentUserAccessToken!,
-      selectedResolution,
-      fieldValue,
-      ctx.alert,
-      isImprove,
-      {
-        name: ctx.field.attributes.label,
-        apiKey: ctx.field.attributes.api_key,
-        validatiors: ctx.field.attributes.validators
-          ? JSON.stringify(ctx.field.attributes.validators, null, 2)
-          : null,
-        hint: ctx.field.attributes.hint
-          ? JSON.stringify(ctx.field.attributes.hint, null, 2)
-          : null,
-      },
-      ctx.formValues,
-      blockType ?? null,
-      null,
-      fieldsetInfo,
-      ctx.itemType.attributes.name
-    )
-      .then((result) => {
-        setPrompt('');
-        ctx.setFieldValue(ctx.fieldPath, result);
-        ctx.disableField(ctx.fieldPath, false);
-        controls.stop();
-        // Done generating, remove loading state
-        setIsLoadingGeneration(false);
-      })
-      .catch((error) => {
-        setPrompt('');
-        ctx.alert(error);
-        ctx.disableField(ctx.fieldPath, false);
-        controls.stop();
-        // On error, also remove loading state
-        setIsLoadingGeneration(false);
-      });
-  };
-
-  // Additional logic to determine if actions are available:
-  // The following checks ensure that if no actions (generate/improve/translate)
-  // apply to this field, we return empty to avoid cluttering UI.
-
+  // Determine if field is empty or localized to handle conditions
   let isEmptyStructuredText =
     fieldType === 'structured_text' &&
     Array.isArray(fieldValue) &&
@@ -480,6 +365,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
       !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
 
+  // If none of the actions apply, return empty
   if (
     ((fieldType === 'file' || fieldType === 'gallery') &&
       !pluginParams.advancedSettings.mediaFieldsPermissions &&
@@ -553,13 +439,96 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
     return <></>;
   }
 
-  // Render the UI
+  /**
+   * handleGeneratePrompt
+   *
+   * Called when user submits prompt to generate/improve field value.
+   * Disables field, sets loading state, shows spinner and descriptive text for generation.
+   */
+  const handleGeneratePrompt = (blockType?: {
+    name: string;
+    apiKey: string;
+    blockModelId: string;
+    blockLevel: number;
+    availableBlocks: string[];
+  }) => {
+    ctx.disableField(ctx.fieldPath, true);
+    setViewState('collapsed');
+
+    const isImprove = viewState === 'prompting-improve';
+    setLastAction(isImprove ? 'improve' : 'generate');
+    setIsLoadingGeneration(true);
+
+    controls.start({
+      rotate: [0, 360],
+      transition: {
+        rotate: {
+          duration: 1,
+          ease: 'linear',
+          repeat: Infinity,
+        },
+      },
+    });
+
+    const fieldsetInfo = ctx.field.relationships.fieldset.data?.id
+      ? {
+          name:
+            ctx.fieldsets[ctx.field.relationships.fieldset.data?.id]?.attributes
+              .title ?? null,
+          hint:
+            ctx.fieldsets[ctx.field.relationships.fieldset.data?.id]?.attributes
+              .hint ?? null,
+        }
+      : null;
+
+    generateFieldValue(
+      0,
+      ctx.itemTypes,
+      prompt,
+      fieldType,
+      pluginParams,
+      ctx.locale,
+      ctx.currentUserAccessToken!,
+      selectedResolution,
+      fieldValue,
+      ctx.alert,
+      isImprove,
+      {
+        name: ctx.field.attributes.label,
+        apiKey: ctx.field.attributes.api_key,
+        validatiors: ctx.field.attributes.validators
+          ? JSON.stringify(ctx.field.attributes.validators, null, 2)
+          : null,
+        hint: ctx.field.attributes.hint
+          ? JSON.stringify(ctx.field.attributes.hint, null, 2)
+          : null,
+      },
+      ctx.formValues,
+      blockType ?? null,
+      null,
+      fieldsetInfo,
+      ctx.itemType.attributes.name
+    )
+      .then((result) => {
+        setPrompt('');
+        ctx.setFieldValue(ctx.fieldPath, result);
+        ctx.disableField(ctx.fieldPath, false);
+        controls.stop();
+        setIsLoadingGeneration(false);
+      })
+      .catch((error) => {
+        setPrompt('');
+        ctx.alert(error);
+        ctx.disableField(ctx.fieldPath, false);
+        controls.stop();
+        setIsLoadingGeneration(false);
+      });
+  };
+
   return (
     <Canvas ctx={ctx}>
       <div className={classNames(s.optionContainer)}>
-        {/* AnimatePresence for smooth transitions */}
         <AnimatePresence>
-          {/* Options Panel */}
           <DatoGPTPromptOptions
             viewState={viewState}
             setViewState={setViewState}
@@ -567,11 +536,14 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
             pluginParams={pluginParams}
             controls={controls}
             fieldValue={fieldValue}
+            isLoadingTranslation={isLoadingTranslation}
+            setIsLoadingTranslation={setIsLoadingTranslation}
+            translationMessage={translationMessage}
+            setTranslationMessage={setTranslationMessage}
           />
         </AnimatePresence>
 
         <AnimatePresence>
-          {/* Prompting Panel (if in prompting/improve state) */}
           <DatoGPTPromptPrompting
             viewState={viewState}
             prompt={prompt}
@@ -583,7 +555,7 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
           />
         </AnimatePresence>
 
-        {/* When loading (generating/improving), show descriptive text next to spinner */}
+        {/* Show descriptive text during generation */}
         {isLoadingGeneration && (
           <span style={{ color: 'gray', marginRight: '8px' }}>
             {lastAction === 'improve'
@@ -592,7 +564,13 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
           </span>
         )}
 
-        {/* The main icon that toggles states */}
+        {/* Show descriptive text during translation */}
+        {isLoadingTranslation && (
+          <span style={{ color: 'gray', marginRight: '8px' }}>
+            {translationMessage}
+          </span>
+        )}
+
         <span className={classNames(s.gptOptions)}>
           <motion.div
             animate={controls}
