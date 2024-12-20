@@ -208,7 +208,7 @@ async function translateBlockValue(
   toLocale: string,
   openai: OpenAI,
   apiToken: string,
-  options?: {
+  _options?: {
     onStart?: (fieldLabel: string, locale: string, fieldPath: string) => void;
     onComplete?: (fieldLabel: string, locale: string) => void;
   }

@@ -13,15 +13,15 @@ import generateUploadOnPrompt, {
 
 export async function handleFileField(
   blockLevel: number,
-  itemTypes: Record<string, unknown>, // not used here, just kept signature same
+  _itemTypes: Record<string, unknown>, // not used here, just kept signature same
   prompt: string,
-  fieldType: string,
+  _fieldType: string,
   pluginParams: ctxParamsType,
   locale: string,
   datoKey: string,
   selectedResolution: availableResolutions,
   fieldValue: unknown,
-  alert: (message: string) => Promise<void>,
+  _alert: (message: string) => Promise<void>,
   isImprove: boolean,
   fieldInfo: {
     name: string;
@@ -30,7 +30,7 @@ export async function handleFileField(
     hint: string | null;
   },
   formValues: Record<string, unknown>,
-  blockInfo: any,
+  _blockInfo: any,
   parentBlockInfo: any,
   fieldsetInfo: any,
   modelName: string,

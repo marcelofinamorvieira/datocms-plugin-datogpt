@@ -15,8 +15,8 @@ import locale from 'locale-codes';
 const localeSelect = locale.getByTag;
 
 export async function handleDefaultField(
-  blockLevel: number,
-  itemTypes: Partial<Record<string, any>>,
+  _blockLevel: number,
+  _itemTypes: Partial<Record<string, any>>,
   prompt: string,
   fieldType: string,
   pluginParams: ctxParamsType,
@@ -24,7 +24,7 @@ export async function handleDefaultField(
   datoKey: string,
   selectedResolution: availableResolutions,
   fieldValue: unknown,
-  alert: (message: string) => Promise<void>,
+  _alert: (message: string) => Promise<void>,
   isImprove: boolean,
   fieldInfo: {
     name: string;

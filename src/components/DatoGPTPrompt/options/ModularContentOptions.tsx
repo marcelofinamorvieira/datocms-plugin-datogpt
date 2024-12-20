@@ -43,9 +43,7 @@ function ModularContentOptions({
   controls,
   fieldValue,
   pluginParams,
-  isLoadingTranslation,
   setIsLoadingTranslation,
-  translationMessage,
   setTranslationMessage,
 }: PropTypes) {
   const hasOtherLocales =
@@ -67,44 +65,6 @@ function ModularContentOptions({
       (ctx.formValues.internalLocales as string[])[0]
     ]
   );
-
-  let isEmptyStructuredText =
-    fieldType === 'structured_text' &&
-    Array.isArray(fieldValue) &&
-    fieldValue.length === 1 &&
-    typeof fieldValue[0] === 'object' &&
-    fieldValue[0] !== null &&
-    'type' in fieldValue[0] &&
-    fieldValue[0].type === 'paragraph' &&
-    fieldValue[0].children.length === 1 &&
-    fieldValue[0].children[0].text === '';
-
-  let hasFieldValueInThisLocale = !!fieldValue && !isEmptyStructuredText;
-
-  if (
-    fieldValue &&
-    typeof fieldValue === 'object' &&
-    !Array.isArray(fieldValue) &&
-    ctx.locale in (fieldValue as Record<string, unknown>)
-  ) {
-    const fieldValueInThisLocale = (fieldValue as Record<string, unknown>)[
-      ctx.locale
-    ];
-
-    isEmptyStructuredText =
-      fieldType === 'structured_text' &&
-      Array.isArray(fieldValueInThisLocale) &&
-      fieldValueInThisLocale.length === 1 &&
-      typeof fieldValueInThisLocale[0] === 'object' &&
-      fieldValueInThisLocale[0] !== null &&
-      'type' in fieldValueInThisLocale[0] &&
-      fieldValueInThisLocale[0].type === 'paragraph' &&
-      fieldValueInThisLocale[0].children.length === 1 &&
-      fieldValueInThisLocale[0].children[0].text === '';
-
-    hasFieldValueInThisLocale =
-      !!fieldValueInThisLocale && !isEmptyStructuredText;
-  }
 
   return (
     <motion.div
@@ -153,7 +113,9 @@ function ModularContentOptions({
               const locales = (
                 ctx.formValues.internalLocales as string[]
               ).slice(1);
-              const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+              const mainLocale = (
+                ctx.formValues.internalLocales as string[]
+              )[0];
               setIsLoadingTranslation(true);
               setTranslationMessage(
                 `Translating ${ctx.field.attributes.label} from ${mainLocale} to all locales...`
@@ -189,7 +151,9 @@ function ModularContentOptions({
             buttonType="muted"
             onClick={async () => {
               setIsLoadingTranslation(true);
-              const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+              const mainLocale = (
+                ctx.formValues.internalLocales as string[]
+              )[0];
               const targetLocale = ctx.locale;
               setTranslationMessage(
                 `Translating ${ctx.field.attributes.label} from ${mainLocale} to ${targetLocale}...`

@@ -40,7 +40,7 @@ export async function handleRichTextBlock(
     blockModelId: string;
     availableBlocks: string[];
   },
-  parentBlockInfo: {
+  _parentBlockInfo: {
     name: string;
     apiKey: string;
     generatedFields: Record<string, unknown>;

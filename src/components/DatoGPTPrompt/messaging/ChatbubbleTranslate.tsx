@@ -37,7 +37,7 @@ type Props = {
   index: number;
 };
 
-export function ChatBubble({ bubble, theme, index }: Props) {
+export function ChatBubble({ bubble, theme }: Props) {
   // Determine styling based on theme and status
   const backgroundColor = useMemo(() => {
     if (bubble.status === 'pending') {

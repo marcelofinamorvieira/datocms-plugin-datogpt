@@ -63,9 +63,7 @@ const DefaultOptions = ({
   fieldValue,
   controls,
   pluginParams,
-  isLoadingTranslation,
   setIsLoadingTranslation,
-  translationMessage,
   setTranslationMessage,
 }: PropTypes) => {
   const hasOtherLocales =
@@ -123,7 +121,8 @@ const DefaultOptions = ({
       fieldValueInThisLocale[0].children.length === 1 &&
       fieldValueInThisLocale[0].children[0].text === '';
 
-    hasFieldValueInThisLocale = !!fieldValueInThisLocale && !isEmptyStructuredText;
+    hasFieldValueInThisLocale =
+      !!fieldValueInThisLocale && !isEmptyStructuredText;
   }
 
   return (
@@ -180,7 +179,9 @@ const DefaultOptions = ({
                   ctx.formValues.internalLocales as string[]
                 ).slice(1);
                 setIsLoadingTranslation(true);
-                const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+                const mainLocale = (
+                  ctx.formValues.internalLocales as string[]
+                )[0];
                 // Set a generic message first
                 setTranslationMessage(
                   `Translating ${ctx.field.attributes.label} from ${mainLocale} to all locales...`
@@ -218,7 +219,9 @@ const DefaultOptions = ({
             <OptionsButton
               onClick={async () => {
                 setIsLoadingTranslation(true);
-                const mainLocale = (ctx.formValues.internalLocales as string[])[0];
+                const mainLocale = (
+                  ctx.formValues.internalLocales as string[]
+                )[0];
                 const targetLocale = ctx.locale;
                 setTranslationMessage(
                   `Translating ${ctx.field.attributes.label} from ${mainLocale} to ${targetLocale}...`

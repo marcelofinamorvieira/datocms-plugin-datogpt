@@ -5,8 +5,8 @@
 // at once using OpenAI, based on user prompts. It also displays a chat-like interface while processing.
 //********************************************************************************************
 
-import { Field, RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
-import { Button, Canvas, Spinner } from 'datocms-react-ui';
+import { RenderItemFormSidebarPanelCtx } from 'datocms-plugin-sdk';
+import { Button, Canvas } from 'datocms-react-ui';
 import { useState } from 'react';
 import { ctxParamsType } from '../Config/ConfigScreen';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,10 +14,6 @@ import ReactTextareaAutosize from 'react-textarea-autosize';
 import s from '../styles.module.css';
 import generateFieldValue from '../../utils/generate/fieldValue/generateFieldValue';
 import { EditorType } from '../../types/editorTypes';
-import {
-  textFieldTypes,
-  translateFieldTypes,
-} from '../Config/AdvancedSettings';
 import { ChatbubbleGenerate } from '../../components/DatoGPTPrompt/messaging/ChatbubbleGenerate';
 
 //-------------------------------------------

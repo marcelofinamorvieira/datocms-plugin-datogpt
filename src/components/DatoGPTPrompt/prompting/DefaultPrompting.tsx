@@ -138,7 +138,6 @@ const DefaultPrompting = ({
   handleGeneratePrompt,
   prompt,
   setPrompt,
-  isImprove,
 }: PropTypes) => {
   return (
     <motion.div

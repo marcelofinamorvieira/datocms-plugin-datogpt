@@ -14,9 +14,9 @@ import generateUploadOnPrompt, {
 
 export async function handleGalleryField(
   blockLevel: number,
-  itemTypes: Record<string, unknown>,
+  _itemTypes: Record<string, unknown>,
   prompt: string,
-  fieldType: string,
+  _fieldType: string,
   pluginParams: ctxParamsType,
   locale: string,
   datoKey: string,
@@ -31,7 +31,7 @@ export async function handleGalleryField(
     hint: string | null;
   },
   formValues: Record<string, unknown>,
-  blockInfo: any,
+  _blockInfo: any,
   parentBlockInfo: any,
   fieldsetInfo: any,
   modelName: string,
