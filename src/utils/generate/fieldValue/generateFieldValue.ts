@@ -1,6 +1,19 @@
 //********************************************************************************************
 // generateFieldValue.ts
 //
+// This file exports the generateFieldValue function, which orchestrates the generation or improvement
+// of a field's value using OpenAI. It delegates logic to specialized helper functions depending on
+// the field type (file, gallery, structured_text, rich_text, or default fields).
+//
+// Key points:
+// - The function receives various parameters including plugin config, current locale, DatoCMS API token, etc.
+// - Depending on the fieldType, it calls helper functions like handleFileField, handleGalleryField,
+//   handleStructuredTextField, handleRichTextBlock, or handleDefaultField.
+// - Added an optional onStepUpdate callback that, if provided, will be called with step-by-step
+//   status messages (especially useful for structured_text fields).
+//
+// The returned value from generateFieldValue is the final, generated or improved field value suitable for the CMS.
+//
 //********************************************************************************************
 
 import OpenAI from 'openai';
@@ -8,17 +21,40 @@ import { ctxParamsType } from '../../../entrypoints/Config/ConfigScreen';
 import { ItemType } from 'datocms-plugin-sdk';
 import { availableResolutions } from '../asset/generateUploadOnPrompt';
 
-// Import helpers for each field type:
 import { handleFileField } from './helpers/handleFileField';
 import { handleGalleryField } from './helpers/handleGalleryField';
 import { handleStructuredTextField } from './helpers/handleStructuredTextField';
 import { handleRichTextBlock } from './helpers/handleRichTextBlock';
 import { handleDefaultField } from './helpers/handleDefaultField';
 
+type OnStepUpdateCallback = (message: string) => void;
+
 /**
  * generateFieldValue
  * ------------------
- * Delegates field-specific logic to helper functions.
+ * Delegates field-specific logic to helper functions based on fieldType.
+ *
+ * Parameters:
+ * - blockLevel: current block recursion depth
+ * - itemTypes: dictionary of item types available
+ * - prompt: user-provided prompt or instructions
+ * - fieldType: the editor type of the current field
+ * - pluginParams: configuration parameters
+ * - locale: current locale
+ * - datoKey: DatoCMS API token
+ * - selectedResolution: resolution for image generation if applicable
+ * - currentFieldValue: the field's current value
+ * - alert: function to display messages in the CMS UI
+ * - isImprove: boolean indicating if we are improving an existing value rather than generating a new one
+ * - fieldInfo: info about the current field (name, apiKey, validators, hint)
+ * - formValues: current record's form values
+ * - blockInfo: info about the current block if field is part of a rich_text block with modular content
+ * - parentBlockInfo: info about the parent block if nested
+ * - fieldsetInfo: info about the fieldset that this field might belong to
+ * - modelName: name of the model this field belongs to
+ * - onStepUpdate: optional callback to receive step-by-step status messages
+ *
+ * Returns: a Promise resolving to the generated/improved field value.
  */
 const generateFieldValue = async (
   blockLevel: number,
@@ -54,25 +90,13 @@ const generateFieldValue = async (
     name: string | null;
     hint: string | null;
   } | null,
-  modelName: string
-) => {
+  modelName: string,
+  onStepUpdate?: OnStepUpdateCallback
+): Promise<unknown> => {
   const openai = new OpenAI({
     apiKey: pluginParams.apiKey,
     dangerouslyAllowBrowser: true,
   });
-
-  // If localized, get current locale value
-  let fieldValue = currentFieldValue;
-  if (
-    fieldValue &&
-    typeof fieldValue === 'object' &&
-    !Array.isArray(fieldValue) &&
-    (fieldValue as Record<string, unknown>)[locale]
-  ) {
-    fieldValue = (fieldValue as Record<string, unknown>)[locale];
-  }
-
-  // Branch by field type:
 
   // Handle file fields
   if (fieldType === 'file') {
@@ -85,7 +109,7 @@ const generateFieldValue = async (
       locale,
       datoKey,
       selectedResolution,
-      fieldValue,
+      currentFieldValue,
       alert,
       isImprove,
       fieldInfo,
@@ -109,7 +133,7 @@ const generateFieldValue = async (
       locale,
       datoKey,
       selectedResolution,
-      fieldValue,
+      currentFieldValue,
       alert,
       isImprove,
       fieldInfo,
@@ -132,18 +156,19 @@ const generateFieldValue = async (
       locale,
       datoKey,
       selectedResolution,
-      fieldValue,
+      currentFieldValue,
       alert,
       isImprove,
       fieldInfo,
       formValues,
       fieldsetInfo,
       modelName,
-      openai
+      openai,
+      onStepUpdate
     );
   }
 
-  // Handle rich_text blocks
+  // Handle rich_text fields (modular content)
   if (blockInfo) {
     return await handleRichTextBlock(
       blockLevel,
@@ -154,7 +179,7 @@ const generateFieldValue = async (
       locale,
       datoKey,
       selectedResolution,
-      fieldValue,
+      currentFieldValue,
       alert,
       isImprove,
       fieldInfo,
@@ -167,7 +192,7 @@ const generateFieldValue = async (
     );
   }
 
-  // Handle all other fields (default)
+  // Default field types (single_line, markdown, wysiwyg, etc.)
   return await handleDefaultField(
     blockLevel,
     itemTypes,
@@ -177,7 +202,7 @@ const generateFieldValue = async (
     locale,
     datoKey,
     selectedResolution,
-    fieldValue,
+    currentFieldValue,
     alert,
     isImprove,
     fieldInfo,

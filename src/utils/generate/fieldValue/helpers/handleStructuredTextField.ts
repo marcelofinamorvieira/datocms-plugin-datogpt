@@ -1,7 +1,45 @@
 //********************************************************************************************
 // handleStructuredTextField.ts
 //
-// Extracted logic for handling 'structured_text' fields from generateFieldValue.
+// This helper function is used by generateFieldValue to handle 'structured_text' fields.
+// It can either improve existing structured text or generate new structured text with blocks.
+// The process involves multiple steps:
+//
+// Steps when isImprove = true:
+// 1. Check if the field is empty or not.
+// 2. Translate/improve inline text values.
+// 3. If there are block nodes, translate/improve them as well.
+// 4. Reassemble the final structured text with the improved strings and updated blocks.
+//
+// Steps when isImprove = false:
+// 1. Generate a base HTML using a wysiwyg prompt.
+// 2. Convert it to structured text format.
+// 3. Determine which blocks to insert based on the prompt and available blocks.
+// 4. Insert the chosen blocks into the structured text.
+//
+// We have now added onStepUpdate calls to inform the caller about what step is currently happening,
+// providing more granular feedback when dealing with structured_text fields.
+//
+// Parameters:
+// - blockLevel: recursion depth for nested blocks
+// - itemTypes: map of available item types
+// - prompt: user prompt
+// - pluginParams: configuration parameters
+// - locale: target locale
+// - datoKey: DatoCMS API token
+// - selectedResolution: resolution for images if needed
+// - fieldValue: current field value
+// - alert: function to display messages
+// - isImprove: boolean indicating whether we are improving an existing value
+// - fieldInfo: info about the current field
+// - formValues: entire form values of the record
+// - fieldsetInfo: info about fieldset if any
+// - modelName: name of the model this field belongs to
+// - openai: OpenAI client instance
+// - onStepUpdate: optional callback to report steps in detail
+//
+// Returns the updated structured text value after all transformations.
+//
 //********************************************************************************************
 
 import OpenAI from 'openai';
@@ -21,6 +59,28 @@ import { buildClient } from '@datocms/cma-client-browser';
 
 const localeSelect = locale.getByTag;
 
+type OnStepUpdateCallback = (message: string) => void;
+
+/**
+ * handleStructuredTextField
+ *
+ * Main function for structured_text fields. It handles two main scenarios:
+ * - Improving existing structured text (isImprove = true)
+ * - Generating new structured text from scratch (isImprove = false)
+ *
+ * When improving (isImprove = true):
+ * - Checks if structured text is empty; if empty, just returns it.
+ * - Translates/improves inline texts by calling OpenAI and substituting text nodes.
+ * - If there are block nodes, generate/improve their fields as well.
+ *
+ * When generating new content (isImprove = false):
+ * - Generates base HTML from WYSIWYG prompt.
+ * - Converts HTML to structured text.
+ * - Queries OpenAI to determine which blocks to insert.
+ * - Generates content for each block and inserts them into the structured text.
+ *
+ * Uses onStepUpdate (if provided) to report each step to the caller.
+ */
 export async function handleStructuredTextField(
   blockLevel: number,
   itemTypes: Partial<Record<string, any>>,
@@ -44,16 +104,12 @@ export async function handleStructuredTextField(
     hint: string | null;
   } | null,
   modelName: string,
-  openai: OpenAI
+  openai: OpenAI,
+  onStepUpdate?: OnStepUpdateCallback
 ) {
-  const trimmedFieldInfo = {
-    name: fieldInfo.name,
-    apiKey: fieldInfo.apiKey,
-    validatiors: null,
-    hint: fieldInfo.hint,
-  };
-
+  // If we are improving existing structured text
   if (isImprove) {
+    onStepUpdate?.('Improving structured text: analyzing existing text...');
     let isEmptyStructuredText =
       Array.isArray(fieldValue) &&
       fieldValue.length === 1 &&
@@ -63,6 +119,7 @@ export async function handleStructuredTextField(
       fieldValue[0].type === 'paragraph' &&
       fieldValue[0].children.length === 1 &&
       fieldValue[0].children[0].text === '';
+
     if (
       fieldValue &&
       typeof fieldValue === 'object' &&
@@ -84,8 +141,11 @@ export async function handleStructuredTextField(
         fieldValueInThisLocale[0].children[0].text === '';
     }
     if (!fieldValue || isEmptyStructuredText) {
+      // Nothing to improve if empty
       return fieldValue;
     }
+
+    onStepUpdate?.('Improving structured text: translating inline texts...');
     const noIdFieldValue = removeIds(fieldValue);
 
     // Extract block nodes separately
@@ -120,7 +180,7 @@ export async function handleStructuredTextField(
             ' Do not add or remove any strings. keeping the initial value of the strings as much as possible, only modify the strings you need to improve the value to follow the following instruction: what you should do is: ' +
             prompt +
             ' Do not add or remove any strings. keeping the initial value as much as possible, only modify the strings you need to improve the value to follow that instruction' +
-            ' Ignore empty strings and strings with just spaces (but do not remove them), keep them as they are.  Return the updated strings array in a valid JSON format do not remove spaces or empty strings. The number of returned strings should be the same as the number of strings in the original array ' +
+            ' Ignore empty strings and strings with just spaces, keep them as they are.  Return the updated strings array in a valid JSON format. The number of returned strings should be the same as the number of strings in the original array ' +
             ' translate your response to ' +
             localeSelect(locale).name,
         },
@@ -136,6 +196,7 @@ export async function handleStructuredTextField(
       apiToken: datoKey,
     });
 
+    onStepUpdate?.('Improving structured text: processing block nodes...');
     for (const node of blockNodes) {
       const nodeCopy = { ...node };
       const blockModelId = nodeCopy.blockModelId;
@@ -161,6 +222,9 @@ export async function handleStructuredTextField(
       }, {} as Record<string, { type: string; validators: string | null; hint: string | null; availableBlocks: string[] }>);
 
       for (const field in nodeCopy) {
+        onStepUpdate?.(
+          `Improving structured text: improving block field "${field}"...`
+        );
         const generatedField = await generateFieldValue(
           1,
           itemTypes,
@@ -173,12 +237,22 @@ export async function handleStructuredTextField(
           nodeCopy[field],
           alert,
           isImprove,
-          fieldInfo,
+          {
+            name: field,
+            apiKey: field,
+            validatiors: fieldTypeDictionary[field].validators,
+            hint: fieldTypeDictionary[field].hint,
+          },
           formValues,
           null,
-          null,
+          {
+            name: node.name || 'Unknown Block',
+            apiKey: node.apiKey || 'block_api_key',
+            generatedFields: fieldTypeDictionary,
+          },
           fieldsetInfo,
-          modelName
+          modelName,
+          onStepUpdate
         );
         nodeCopy[field] = generatedField;
       }
@@ -190,13 +264,16 @@ export async function handleStructuredTextField(
       });
     }
 
-    // Reconstruct the object with the translated inline texts
+    onStepUpdate?.(
+      'Improving structured text: reconstructing final structure...'
+    );
+    // Reconstruct the object with the improved inline texts
     const reconstructedObject = reconstructObject(
       fieldValueWithoutBlocks,
       returnedTextValues
     );
 
-    // Insert the translated block nodes back into their original positions
+    // Insert the block nodes back
     let finalReconstructedObject = reconstructedObject;
     for (const node of blockNodes as any[]) {
       finalReconstructedObject = insertObjectAtIndex(
@@ -206,7 +283,6 @@ export async function handleStructuredTextField(
       );
     }
 
-    // Clean up temporary keys like 'originalIndex'
     const cleanedReconstructedObject = finalReconstructedObject.map(
       ({
         originalIndex,
@@ -220,6 +296,15 @@ export async function handleStructuredTextField(
     return cleanedReconstructedObject;
   }
 
+  // If not improving, we are generating new structured text
+  onStepUpdate?.('Generating structured text: creating base document...');
+  const trimmedFieldInfo = {
+    name: fieldInfo.name,
+    apiKey: fieldInfo.apiKey,
+    validatiors: null,
+    hint: fieldInfo.hint,
+  };
+
   // Generate a base HTML using wysiwyg prompt
   const baseDocument = await generateFieldValue(
     0,
@@ -232,16 +317,22 @@ export async function handleStructuredTextField(
     selectedResolution,
     '',
     alert,
-    isImprove,
+    false,
     trimmedFieldInfo,
     formValues,
     null,
     null,
     fieldsetInfo,
-    modelName
+    modelName,
+    onStepUpdate
   );
 
-  const structuredTextBaseDocument = await htmlToStructuredText(baseDocument);
+  onStepUpdate?.(
+    'Generating structured text: converting HTML to structured text...'
+  );
+  const structuredTextBaseDocument = await htmlToStructuredText(
+    baseDocument as string
+  );
 
   function replaceValueWithText(obj: any): any {
     if (Array.isArray(obj)) {
@@ -289,6 +380,7 @@ export async function handleStructuredTextField(
   const structuredTextBlocks = validators.structured_text_blocks.item_types;
 
   if (!structuredTextBlocks.length) {
+    // No blocks to insert, just return the base doc
     return structuredTextBase;
   }
 
@@ -300,6 +392,9 @@ export async function handleStructuredTextField(
     };
   });
 
+  onStepUpdate?.(
+    'Generating structured text: selecting which blocks to insert...'
+  );
   const blockPrompt =
     basePrompt +
     ' Based on the prompt ' +
@@ -308,8 +403,8 @@ export async function handleStructuredTextField(
     baseDocument +
     ' The available blocks are: ' +
     JSON.stringify(blocksWithNames, null, 2) +
-    ' return the response as an array of objects as a valid JSON, deleting the blocks that should not be created for this prompt, and keeping the ones that should be created. Make sure to keep only the blocks that are appropriate in the context of the HTML. Choose only the ones really necessary, be conservative with the number of blocks you insert. You can repeat a block more times than one if you think it is necessary for the prompt, also, make sure not to repeat info that is already present in the html ' +
-    ' add to the following object a "prompt" key to each block, the prompt value should be an instruction, a prompt, to generate the value, always starting with "Generate a block that..."';
+    ' return the response as an array of objects as a valid JSON. Choose only the necessary blocks.' +
+    ' Add a "prompt" key to each block with an instruction starting with "Generate a block that..."';
 
   const blockPromptResponse = await openai.chat.completions.create({
     messages: [
@@ -327,6 +422,9 @@ export async function handleStructuredTextField(
 
   const blockArray: any[] = [];
 
+  onStepUpdate?.(
+    'Generating structured text: generating content for chosen blocks...'
+  );
   for (const block of blockTypeResponses) {
     await generateFieldValue(
       blockLevel,
@@ -339,7 +437,7 @@ export async function handleStructuredTextField(
       selectedResolution,
       blockArray,
       alert,
-      isImprove,
+      false,
       fieldInfo,
       formValues,
       {
@@ -350,7 +448,8 @@ export async function handleStructuredTextField(
       },
       null,
       fieldsetInfo,
-      modelName
+      modelName,
+      onStepUpdate
     );
   }
 
@@ -365,13 +464,16 @@ export async function handleStructuredTextField(
     };
   });
 
+  onStepUpdate?.(
+    'Generating structured text: merging selected blocks into the structured text...'
+  );
   const finalPrompt =
     basePrompt +
     ' insert into the following JSON array of objects :' +
     JSON.stringify(structuredTextBase, null, 2) +
-    ' the following objects in this JSON array, in the approprite positions, where it is contextually approprite, do not repeat any object, and use all of them: ' +
+    ' the following objects in this JSON array, at appropriate positions: ' +
     JSON.stringify(structuredFormatedBlockArray, null, 2) +
-    ' return the exact JSON array at the start of this message, do not remove or alter anything, just add the objects from the second array into the first one in the correct positions';
+    ' return the exact JSON array.';
 
   const finalCompletion = await openai.chat.completions.create({
     messages: [
