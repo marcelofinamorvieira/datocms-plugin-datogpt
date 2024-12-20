@@ -40,7 +40,7 @@ export async function handleFileField(
     pluginParams.advancedSettings.blockAssetsGeneration === 'null' &&
     blockLevel > 0
   ) {
-    return null;
+    return fieldValue;
   }
 
   if (isImprove) {

@@ -80,7 +80,7 @@ const parseGptValue = async (
         title: returnedObject.title,
         description: returnedObject.description,
         // Here we decide whether to generate the image asset or not.
-        image: null as string | null,    // Default null, will assign if we generate.
+        image: returnedObject.image as string | null, // Default null, will assign if we generate.
         twitter_card: 'summary_large_image',
         no_index: false,
       };
@@ -97,9 +97,6 @@ const parseGptValue = async (
           selectedResolution
         );
         seoObject.image = uploads[0].upload_id; // Assign the generated asset ID
-      } else {
-        // If not generating asset, image stays null
-        seoObject.image = null;
       }
 
       return seoObject;

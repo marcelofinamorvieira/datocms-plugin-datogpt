@@ -391,11 +391,13 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
       ctx.itemType.attributes.name
     )
       .then((result) => {
+        setPrompt('');
         ctx.setFieldValue(ctx.fieldPath, result);
         ctx.disableField(ctx.fieldPath, false);
         controls.stop();
       })
       .catch((error) => {
+        setPrompt('');
         ctx.alert(error);
         ctx.disableField(ctx.fieldPath, false);
         controls.stop();

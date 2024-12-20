@@ -39,7 +39,6 @@ export function DropdownSetting({
   options,
   onSelect,
 }: DropdownSettingProps) {
-  console.log(options);
   return (
     <div
       style={{

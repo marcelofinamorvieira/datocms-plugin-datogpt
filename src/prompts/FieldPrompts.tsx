@@ -18,6 +18,6 @@ export const fieldPrompt: FieldPrompts = {
     'A valid JSON string of an object with the following format: {red: Integer between 0 and 255, blue: Integer between 0 and 255, alpha: Integer between 0 and 255, green: Integer between 0 and 255} only return the json string, nothing else',
   slug: 'A String value that will be used as an url slug satisfies the following regular expression: /^[a-z0-9_]+(?:-[a-z0-9]+)*$/',
   json: 'A valid JSON string. Only return the json string, nothing else',
-  seo: 'A valid JSON string of an object with the following format: {title: "A string with an SEO title with at most 60 charactes", description: "A string with an SEO description with at most 160 characters", imagePrompt: "A string describing a good DALLE 3 prompt to generate an SEO image for this post" }',
+  seo: 'A valid JSON string of an object with the following format: {title: "A string with an SEO title with at most 60 charactes", description: "A string with an SEO description with at most 160 characters", if it is asking for a generation, generate also this key value: imagePrompt: "A string describing a good DALLE 3 prompt to generate an SEO image for this post" if it is asking for an improvement, generate this key value: image: "repeat the original id of the image" }',
   textarea: 'a string with no limit on the number of characters',
 };

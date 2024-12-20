@@ -44,7 +44,11 @@ async function generateAllFields(
   prompt: string,
   isImprove: boolean,
   callbacks?: {
-    onStart?: (fieldLabel: string, fieldPath: string, isImprove: boolean) => void;
+    onStart?: (
+      fieldLabel: string,
+      fieldPath: string,
+      isImprove: boolean
+    ) => void;
     onComplete?: (fieldLabel: string) => void;
   }
 ) {
@@ -222,7 +226,12 @@ export default function DatoGPTSidebar({
   // generationBubbles array now also used for improvements
   // bubble now also includes isImprove to distinguish message displayed
   const [generationBubbles, setGenerationBubbles] = useState<
-    { fieldLabel: string; status: 'pending' | 'done'; fieldPath: string; isImprove: boolean }[]
+    {
+      fieldLabel: string;
+      status: 'pending' | 'done';
+      fieldPath: string;
+      isImprove: boolean;
+    }[]
   >([]);
 
   if (!pluginParams.apiKey || !pluginParams.gptModel) {
@@ -250,10 +259,12 @@ export default function DatoGPTSidebar({
       },
     })
       .then(() => {
+        setPrompts('');
         ctx.notice('All fields generated successfully');
         setIsLoading(false);
       })
       .catch((error) => {
+        setPrompts('');
         ctx.alert(error.message || 'Unknown error');
         setIsLoading(false);
       });
@@ -281,10 +292,12 @@ export default function DatoGPTSidebar({
       },
     })
       .then(() => {
+        setPrompts('');
         ctx.notice('All fields improved successfully');
         setIsLoading(false);
       })
       .catch((error) => {
+        setPrompts('');
         ctx.alert(error.message || 'Unknown error');
         setIsLoading(false);
       });

@@ -60,7 +60,6 @@ export async function handleRichTextBlock(
     if (!fieldValue || (Array.isArray(fieldValue) && fieldValue.length === 0)) {
       return [];
     }
-    console.log('fieldValue', fieldValue);
     const fieldValueCopy = fieldValue as Array<Record<string, any>>;
     const fields = await client.fields.list(fieldValueCopy[0].itemTypeId);
     const orderedFields = fields.sort((a, b) => a.position - b.position);
