@@ -1,4 +1,7 @@
-import { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
+import {
+  ExecuteFieldDropdownActionCtx,
+  RenderFieldExtensionCtx,
+} from 'datocms-plugin-sdk';
 import { AnimationControls } from 'framer-motion';
 import { ctxParamsType } from '../entrypoints/Config/ConfigScreen';
 import OpenAI from 'openai';
@@ -472,19 +475,15 @@ export async function translateFieldValue(
  * - Calls translateFieldValue to get the translated version of the field
  * - Re-enables the field and stops loading
  *
- * @param setViewState State setter for the UI view state
  * @param fieldValue The current field value to translate
  * @param ctx The DatoCMS RenderFieldExtensionCtx
- * @param controls Animation controls for the spinner
  * @param pluginParams Configuration parameters
  * @param toLocale The target locale to translate into
  * @param fieldType The editor type for the field
  */
 const TranslateField = async (
-  setViewState: React.Dispatch<React.SetStateAction<string>>,
   fieldValue: unknown,
-  ctx: RenderFieldExtensionCtx,
-  controls: AnimationControls,
+  ctx: ExecuteFieldDropdownActionCtx,
   pluginParams: ctxParamsType,
   toLocale: string,
   fieldType: string
@@ -495,17 +494,17 @@ const TranslateField = async (
 
   // UI adjustments before translation
   ctx.disableField(ctx.fieldPath, true);
-  setViewState('collapsed');
-  controls.start({
-    rotate: [0, 360],
-    transition: {
-      rotate: {
-        duration: 1,
-        ease: 'linear',
-        repeat: Infinity,
-      },
-    },
-  });
+  // setViewState('collapsed');
+  // controls.start({
+  //   rotate: [0, 360],
+  //   transition: {
+  //     rotate: {
+  //       duration: 1,
+  //       ease: 'linear',
+  //       repeat: Infinity,
+  //     },
+  //   },
+  // });
 
   // Determine the field type prompt
   let fieldTypePrompt = 'Return the response in the format of ';
@@ -536,7 +535,7 @@ const TranslateField = async (
   // Update the field with the translated value
   ctx.setFieldValue(fieldPathArray.join('.'), translatedFieldValue);
   ctx.disableField(ctx.fieldPath, false);
-  controls.stop();
+  // controls.stop();
 };
 
 export default TranslateField;

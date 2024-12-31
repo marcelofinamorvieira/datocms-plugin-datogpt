@@ -33,7 +33,7 @@
 
 import { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
-import { Canvas } from 'datocms-react-ui';
+import { Button, Canvas } from 'datocms-react-ui';
 import { useState } from 'react';
 import s from '../styles.module.css';
 import { AiOutlineOpenAI } from 'react-icons/ai';
@@ -287,9 +287,21 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
   if (
     !pluginParams ||
     !pluginParams.gptModel ||
-    pluginParams.gptModel === 'None'
+    pluginParams.gptModel === 'None' ||
+    !(
+      pluginParams.dallEModel === 'dall-e-3' ||
+      pluginParams.dallEModel === 'dall-e-2'
+    )
   ) {
-    return <>Please insert a valid API Key and select a GPT Model</>;
+    return (
+      <Button
+        onClick={() =>
+          ctx.navigateTo('/configuration/plugins/' + ctx.plugin.id + '/edit')
+        }
+      >
+        Please insert a valid API Key and select a GPT Model
+      </Button>
+    );
   }
 
   const toggleOptions = () => {
@@ -525,6 +537,150 @@ export default function DatoGPTPrompt({ ctx }: PropTypes) {
       });
   };
 
+<<<<<<< Updated upstream
+=======
+  /**
+   * Conditional rendering:
+   * - If there are no applicable actions for this field, return empty.
+   * - Otherwise, show the main UI with the icon and either options or prompting states.
+   */
+
+  // Check conditions to ensure there's at least one action (generate/improve/translate) applicable
+  // If no action applies, return empty to avoid cluttering the UI.
+  // These checks replicate logic from the original code to ensure nothing breaks.
+  // For brevity, we trust existing logic and conditions as is.
+
+  let isEmptyStructuredText =
+    fieldType === 'structured_text' &&
+    Array.isArray(fieldValue) &&
+    fieldValue.length === 1 &&
+    typeof fieldValue[0] === 'object' &&
+    fieldValue[0] !== null &&
+    'type' in fieldValue[0] &&
+    fieldValue[0].type === 'paragraph' &&
+    fieldValue[0].children.length === 1 &&
+    fieldValue[0].children[0].text === '';
+
+  let hasFieldValueInThisLocale = !!fieldValue && !isEmptyStructuredText;
+
+  const hasOtherLocales =
+    Array.isArray(ctx.formValues.internalLocales) &&
+    ctx.formValues.internalLocales.length > 1;
+
+  const isLocalized = !!(
+    !fieldsThatDontNeedTranslation.includes(fieldType) &&
+    hasOtherLocales &&
+    !ctx.parentField &&
+    fieldValue &&
+    typeof fieldValue === 'object' &&
+    !Array.isArray(fieldValue) &&
+    (fieldValue as Record<string, unknown>)[
+      (ctx.formValues.internalLocales as string[])[0]
+    ]
+  );
+
+  if (
+    fieldValue &&
+    typeof fieldValue === 'object' &&
+    !Array.isArray(fieldValue) &&
+    ctx.locale in (fieldValue as Record<string, unknown>)
+  ) {
+    const fieldValueInThisLocale = (fieldValue as Record<string, unknown>)[
+      ctx.locale
+    ];
+
+    isEmptyStructuredText =
+      fieldType === 'structured_text' &&
+      Array.isArray(fieldValueInThisLocale) &&
+      fieldValueInThisLocale.length === 1 &&
+      typeof fieldValueInThisLocale[0] === 'object' &&
+      fieldValueInThisLocale[0] !== null &&
+      'type' in fieldValueInThisLocale[0] &&
+      fieldValueInThisLocale[0].type === 'paragraph' &&
+      fieldValueInThisLocale[0].children.length === 1 &&
+      fieldValueInThisLocale[0].children[0].text === '';
+
+    hasFieldValueInThisLocale =
+      !!fieldValueInThisLocale && !isEmptyStructuredText;
+  }
+
+  // If conditions to show/hide the UI fail, return nothing
+  // (These conditions remain as in the original code, ensuring no functional changes)
+  if (
+    ((fieldType === 'file' || fieldType === 'gallery') &&
+      !pluginParams.advancedSettings.mediaFieldsPermissions &&
+      !pluginParams.advancedSettings.generateAlts) ||
+    (!(
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        (fieldValue as Upload)?.upload_id) ||
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload)
+          ?.upload_id) ||
+      (!Array.isArray(fieldValue) &&
+        typeof fieldValue === 'object' &&
+        ((fieldValue as Record<string, unknown>)?.[ctx.locale] as Upload[])
+          ?.length > 0) ||
+      (Array.isArray(fieldValue) && fieldValue.length > 0)
+    ) &&
+      !pluginParams.advancedSettings.mediaFieldsPermissions)
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.improveValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.translationFields.includes(
+      fieldType as keyof typeof translateFieldTypes
+    )
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !hasFieldValueInThisLocale
+  ) {
+    return <></>;
+  }
+
+  if (
+    !(
+      fieldType === 'file' ||
+      fieldType === 'gallery' ||
+      fieldType === 'rich_text'
+    ) &&
+    !pluginParams.advancedSettings.generateValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !pluginParams.advancedSettings.improveValueFields.includes(
+      fieldType as keyof typeof textFieldTypes
+    ) &&
+    !isLocalized
+  ) {
+    return <></>;
+  }
+
+  // Render the main UI with icon and conditional panels
+>>>>>>> Stashed changes
   return (
     <Canvas ctx={ctx}>
       <div className={classNames(s.optionContainer)}>

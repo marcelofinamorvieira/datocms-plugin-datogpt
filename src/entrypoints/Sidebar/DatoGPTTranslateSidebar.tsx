@@ -71,7 +71,30 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
 
   // If no valid API key or model is configured, prompt user to fix configuration
   if (!pluginParams.apiKey || !pluginParams.gptModel) {
-    return <div>Please insert a valid API Key and select a GPT Model</div>;
+    return (
+      <Canvas ctx={ctx}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Button
+            buttonType="muted"
+            onClick={() =>
+              ctx.navigateTo(
+                '/configuration/plugins/' + ctx.plugin.id + '/edit'
+              )
+            }
+          >
+            Insert a valid OpenAI API Key <br /> and select a GPT & DALL-E Model
+          </Button>
+        </div>
+      </Canvas>
+    );
   }
 
   /**
@@ -233,7 +256,7 @@ export default function DatoGPTTranslateSidebar({ ctx }: PropTypes) {
                 <div
                   key={index}
                   onClick={() => {
-                    ctx.scrollToField(bubble.fieldPath, bubble.locale); 
+                    ctx.scrollToField(bubble.fieldPath, bubble.locale);
                   }}
                 >
                   <ChatBubble
